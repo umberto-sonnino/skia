@@ -420,7 +420,8 @@ DEF_GPUTEST_FOR_RENDERING_CONTEXTS(PromiseImageTextureFullCache, reporter, ctxIn
         GrSurfaceDesc desc;
         desc.fConfig = kRGBA_8888_GrPixelConfig;
         desc.fWidth = desc.fHeight = 100;
-        textures[i] = ctx->priv().resourceProvider()->createTexture(desc, SkBudgeted::kYes);
+        textures[i] = ctx->priv().resourceProvider()->createTexture(
+            desc, SkBudgeted::kYes, GrResourceProvider::Flags::kNoPendingIO);
         REPORTER_ASSERT(reporter, textures[i]);
     }
 
@@ -489,7 +490,7 @@ DEF_GPUTEST_FOR_RENDERING_CONTEXTS(PromiseImageNullFulfill, reporter, ctxInfo) {
     // Draw the image a few different ways.
     canvas->drawImage(refImg, 0, 0);
     SkPaint paint;
-    paint.setColorFilter(SkColorFilter::MakeLinearToSRGBGamma());
+    paint.setColorFilter(SkColorFilters::LinearToSRGBGamma());
     canvas->drawImage(refImg, 0, 0, &paint);
     auto shader = refImg->makeShader(SkTileMode::kClamp, SkTileMode::kClamp);
     REPORTER_ASSERT(reporter, shader);
