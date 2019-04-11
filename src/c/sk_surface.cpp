@@ -15,6 +15,10 @@
 #include "SkPictureRecorder.h"
 #include "SkSurface.h"
 
+#include "GrContext.h"
+#include "gl/GrGLInterface.h"
+#include "gl/GrGLUtil.h"
+
 #include "sk_canvas.h"
 #include "sk_data.h"
 #include "sk_image.h"
@@ -33,7 +37,6 @@ const struct {
     { RGB_V_SK_PIXELGEOMETRY,   kRGB_V_SkPixelGeometry   },
     { BGR_V_SK_PIXELGEOMETRY,   kBGR_V_SkPixelGeometry   },
 };
-
 
 static bool from_c_pixelgeometry(sk_pixelgeometry_t cGeom, SkPixelGeometry* skGeom) {
     for (size_t i = 0; i < SK_ARRAY_COUNT(gPixelGeometryMap); ++i) {
@@ -333,7 +336,45 @@ void sk_canvas_draw_picture(sk_canvas_t* ccanvas, const sk_picture_t* cpicture,
     AsCanvas(ccanvas)->drawPicture(AsPicture(cpicture), matrixPtr, AsPaint(cpaint));
 }
 
+void sk_canvas_flush(sk_canvas_t* ccanvas)
+{
+    AsCanvas(ccanvas)->flush();
+}
+
+void sk_canvas_clear(sk_canvas_t* ccanvas, sk_color_t color)
+{
+    AsCanvas(ccanvas)->clear(color);
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////
+
+sk_surface_t* sk_surface_new_gl(const sk_imageinfo_t* cinfo)
+{
+    sk_sp<const GrGLInterface> interface = GrGLMakeNativeInterface();
+    sk_sp<GrContext> context = GrContext::MakeGL(interface);
+    const SkImageInfo* info = reinterpret_cast<const SkImageInfo*>(cinfo);
+
+    GrGLint buffer;
+    GR_GL_GetIntegerv(interface.get(), GR_GL_FRAMEBUFFER_BINDING, &buffer);
+    GrGLFramebufferInfo fb_info;
+    fb_info.fFBOID = (GrGLuint)buffer;
+    fb_info.fFormat = GR_GL_RGBA8;
+
+    GrBackendRenderTarget renderTarget(info->width(), info->height(), 0, 0, fb_info);
+
+    sk_sp<SkColorSpace> colorSpace = SkColorSpace::MakeSRGB();
+
+    const SkSurfaceProps surface_props(SkSurfaceProps::InitType::kLegacyFontHost_InitType);
+
+    return (sk_surface_t*)SkSurface::MakeFromBackendRenderTarget(
+        context.get(),
+        renderTarget,
+        GrSurfaceOrigin::kBottomLeft_GrSurfaceOrigin,
+        kRGBA_8888_SkColorType, // TODO: should add getter (e.g. FirstSupportedColorType()) as in Flutter.
+        colorSpace,
+        &surface_props
+    ).release();
+}
 
 sk_surface_t* sk_surface_new_raster(const sk_imageinfo_t* cinfo,
                                     const sk_surfaceprops_t* props) {
