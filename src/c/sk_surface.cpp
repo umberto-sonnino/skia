@@ -304,8 +304,8 @@ void sk_canvas_clip_rect(sk_canvas_t* ccanvas, const sk_rect_t* crect) {
     AsCanvas(ccanvas)->clipRect(AsRect(*crect));
 }
 
-void sk_canvas_clip_path(sk_canvas_t* ccanvas, const sk_path_t* cpath) {
-    AsCanvas(ccanvas)->clipPath(AsPath(*cpath));
+void sk_canvas_clip_path(sk_canvas_t* ccanvas, const sk_path_t* cpath, bool doAntiAlias) {
+    AsCanvas(ccanvas)->clipPath(AsPath(*cpath), doAntiAlias);
 }
 
 void sk_canvas_draw_paint(sk_canvas_t* ccanvas, const sk_paint_t* cpaint) {
