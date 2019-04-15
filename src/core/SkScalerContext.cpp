@@ -244,10 +244,10 @@ void SkScalerContext::getMetrics(SkGlyph* glyph) {
     }
 
     if (fMaskFilter) {
-        SkMask      src, dst;
+        SkMask      src = glyph->mask(),
+                    dst;
         SkMatrix    matrix;
 
-        glyph->toMask(&src);
         fRec.getMatrixFrom2x2(&matrix);
 
         src.fImage = nullptr;  // only want the bounds from the filter
@@ -521,9 +521,8 @@ void SkScalerContext::getImage(const SkGlyph& origGlyph) {
         generateImage(*glyph);
     } else {
         SkPath devPath;
-        SkMask mask;
+        SkMask mask = glyph->mask();
 
-        glyph->toMask(&mask);
         if (!this->internalGetPath(glyph->getPackedID(), &devPath)) {
             generateImage(*glyph);
         } else {
@@ -534,13 +533,12 @@ void SkScalerContext::getImage(const SkGlyph& origGlyph) {
     }
 
     if (fMaskFilter) {
-        SkMask      srcM, dstM;
-        SkMatrix    matrix;
-
         // the src glyph image shouldn't be 3D
         SkASSERT(SkMask::k3D_Format != glyph->fMaskFormat);
 
-        glyph->toMask(&srcM);
+        SkMask      srcM = glyph->mask(),
+                    dstM;
+        SkMatrix    matrix;
 
         fRec.getMatrixFrom2x2(&matrix);
 
@@ -920,16 +918,6 @@ static bool too_big_for_lcd(const SkScalerContextRec& rec, bool checkPost2x2) {
     }
 }
 
-// if linear-text is on, then we force hinting to be off (since that's sort of
-// the point of linear-text.
-static SkFontHinting computeHinting(const SkFont& font) {
-    SkFontHinting h = (SkFontHinting)font.getHinting();
-    if (font.isLinearMetrics()) {
-        h = kNo_SkFontHinting;
-    }
-    return h;
-}
-
 // The only reason this is not file static is because it needs the context of SkScalerContext to
 // access SkPaint::computeLuminanceColor.
 void SkScalerContext::MakeRecAndEffects(const SkFont& font, const SkPaint& paint,
@@ -1050,8 +1038,15 @@ void SkScalerContext::MakeRecAndEffects(const SkFont& font, const SkPaint& paint
     }
     rec->fFlags = SkToU16(flags);
 
+    // if linear-text is on, then we force hinting to be off (since that's sort of
+    // the point of linear-text.
+    SkFontHinting hinting = (SkFontHinting)font.getHinting();
+    if (font.isLinearMetrics()) {
+        hinting = kNo_SkFontHinting;
+    }
+
     // these modify fFlags, so do them after assigning fFlags
-    rec->setHinting(computeHinting(font));
+    rec->setHinting(hinting);
 
     rec->setLuminanceColor(SkPaintPriv::ComputeLuminanceColor(paint));
 
