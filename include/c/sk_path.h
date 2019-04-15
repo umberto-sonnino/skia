@@ -58,10 +58,35 @@ SK_API void sk_path_cubic_to(sk_path_t*,
                              float x1, float y1,
                              float x2, float y2);
 /**
+   Adds to `cpath` a new sub-path that consists of `csubpath` offset by
+   `x`,`y`.
+   If `sk_matrix_t` is specified the path will be transformed by this matrix
+   after the matrix is translated by the given offset. The matrix is a 4x4
+   matrix stored in column major order.
+*/
+SK_API void sk_path_add_path(sk_path_t* cpath, const sk_path_t* csubpath, float x, float y);
+
+SK_API void sk_path_add_path_with_matrix(sk_path_t* cpath, const sk_path_t* csubpath, 
+                                         float x, float y, sk_matrix_t*);
+
+/**
    Close the current contour. If the current point is not equal to the
    first point of the contour, a line segment is automatically added.
 */
 SK_API void sk_path_close(sk_path_t*);
+
+/**
+    Clears the sk_path_t object of all sub-paths, returning it to the
+    same state it had when it was created. The current point is
+    reset to the origin.
+*/
+SK_API void sk_path_reset(sk_path_t* cpath);
+
+/**
+    Sets the sk_path_t fill type as FillType::kEvenOdd_FillType or 
+    FillType::kWinding_FillType depending on the value of `isEvenOdd`
+*/
+void sk_path_set_evenodd(sk_path_t* cpath, bool isEvenOdd);
 
 /**
     Add a closed rectangle contour to the path.
