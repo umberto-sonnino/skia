@@ -920,7 +920,7 @@ public:
         @param path         SkPath to combine with clip
         @param doAntiAlias  true if clip is to be anti-aliased
     */
-    void clipPath(const SkPath& path, bool doAntiAlias = false) {
+    void clipPath(const SkPath& path, bool doAntiAlias = true) {
         this->clipPath(path, SkClipOp::kIntersect, doAntiAlias);
     }
 
