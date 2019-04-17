@@ -136,6 +136,11 @@ SK_API void sk_paint_set_shader(sk_paint_t*, sk_shader_t*);
 SK_API void sk_paint_set_maskfilter(sk_paint_t*, sk_maskfilter_t*);
 
 /**
+ * Set the paint's filter quality to the specified value.
+ */
+SK_API void sk_paint_set_filterquality(sk_paint_t*, uint32_t);
+
+/**
  *  Set the paint's xfermode to the specified parameter.
  */
 SK_API void sk_paint_set_xfermode_mode(sk_paint_t*, sk_xfermode_mode_t);
