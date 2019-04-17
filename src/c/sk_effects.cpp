@@ -5,6 +5,7 @@
  * found in the LICENSE file.
  */
 
+#include "include/core/SkImage.h"
 #include "include/core/SkMatrix.h"
 #include "src/c/sk_types_priv.h"
 
@@ -140,6 +141,11 @@ sk_shader_t* sk_shader_new_two_point_conical_gradient(const sk_point_t* start,
                                                         reinterpret_cast<const SkColor*>(colors),
                                                         reinterpret_cast<const SkScalar*>(colorPos),
                                                         colorCount, mode, 0, &matrix).release();
+}
+
+sk_shader_t* sk_shader_new_image(sk_image_t* cimage) {
+    const SkImage* image = reinterpret_cast<const SkImage*>(cimage);
+    return (sk_shader_t*)image->makeShader().release();
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////

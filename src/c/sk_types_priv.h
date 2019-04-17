@@ -13,6 +13,7 @@
 class SkMaskFilter;
 class SkPaint;
 class SkShader;
+class SkVertices;
 
 static inline const SkPaint& AsPaint(const sk_paint_t& cpaint) {
     return reinterpret_cast<const SkPaint&>(cpaint);
@@ -36,6 +37,14 @@ static inline sk_maskfilter_t* ToMaskFilter(SkMaskFilter* filter) {
 
 static inline SkShader* AsShader(sk_shader_t* cshader) {
     return reinterpret_cast<SkShader*>(cshader);
+}
+
+static inline SkVertices* AsVertices(sk_vertices_t* cvertices) {
+    return reinterpret_cast<SkVertices*>(cvertices);
+}
+
+static inline const SkVertices* AsVertices(const sk_vertices_t* cvertices) {
+    return reinterpret_cast<const SkVertices*>(cvertices);
 }
 
 #endif
