@@ -73,6 +73,10 @@ void sk_paint_set_maskfilter(sk_paint_t* cpaint, sk_maskfilter_t* cfilter) {
     AsPaint(cpaint)->setMaskFilter(sk_ref_sp(AsMaskFilter(cfilter)));
 }
 
+void sk_paint_set_filterquality(sk_paint_t* cpaint, uint32_t fquality) {
+    AsPaint(cpaint)->setFilterQuality(static_cast<SkFilterQuality>(fquality));
+}
+
 bool sk_paint_is_stroke(const sk_paint_t* cpaint) {
     return AsPaint(*cpaint).getStyle() != SkPaint::kFill_Style;
 }
