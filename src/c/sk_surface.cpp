@@ -15,6 +15,7 @@
 #include "SkPathMeasure.h"
 #include "SkPictureRecorder.h"
 #include "SkSurface.h"
+#include "SkVertices.h"
 
 #include "GrContext.h"
 #include "gl/GrGLInterface.h"
@@ -27,6 +28,7 @@
 #include "sk_path.h"
 #include "sk_surface.h"
 #include "sk_types_priv.h"
+#include "sk_vertices.h"
 
 const struct {
     sk_pixelgeometry_t fC;
@@ -360,6 +362,14 @@ void sk_canvas_draw_picture(sk_canvas_t* ccanvas, const sk_picture_t* cpicture,
     AsCanvas(ccanvas)->drawPicture(AsPicture(cpicture), matrixPtr, AsPaint(cpaint));
 }
 
+void sk_canvas_draw_vertices(sk_canvas_t* ccanvas, 
+                                    const sk_vertices_t* cvertices, 
+                                    const sk_paint_t* cpaint) {
+    const SkVertices* vertices = AsVertices(cvertices);
+    const SkPaint* paint = AsPaint(cpaint);
+    AsCanvas(ccanvas)->drawVertices(vertices, SkBlendMode::kSrcOver, *paint);
+}
+
 void sk_canvas_flush(sk_canvas_t* ccanvas)
 {
     AsCanvas(ccanvas)->flush();
@@ -502,6 +512,48 @@ size_t sk_data_get_size(const sk_data_t* cdata) {
 
 const void* sk_data_get_data(const sk_data_t* cdata) {
     return AsData(cdata)->data();
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////
+
+sk_vertices_t* sk_vertices_new(const float cvertices[], int vertexCount,
+                               const float textureCoordinates[],
+                               const int indices[], int indexCount) {
+    uint32_t builderFlags = 0;
+    if(textureCoordinates != nullptr) {
+        builderFlags |= SkVertices::BuilderFlags::kHasTexCoords_BuilderFlag;
+    }
+
+    SkVertices::Builder builder(SkVertices::VertexMode::kTriangles_VertexMode, 
+                                vertexCount, indexCount, builderFlags);
+
+    if(vertexCount > 0) {
+        SkPoint* positions = builder.positions();
+        for(int i = 0; i < vertexCount*2; i += 2) {
+            positions[i/2] = SkPoint::Make(cvertices[i], cvertices[i+1]);
+        }
+
+        SkPoint* texCoords = builder.texCoords();
+        for(int i = 0; i < vertexCount*2; i += 2) {
+            texCoords[i/2] = SkPoint::Make(textureCoordinates[i], textureCoordinates[i+1]); 
+        }
+    }
+
+    if(indexCount > 0) {
+        uint16_t* builderIndices = builder.indices();
+        for(int i = 0; i < indexCount; i++) {
+            builderIndices[i] = indices[i];
+        }
+    }
+
+
+    sk_sp<SkVertices> vertices = builder.detach();
+
+    return (sk_vertices_t*)vertices.release();
+}
+
+void sk_vertices_unref(sk_vertices_t* cvertices) {
+    SkSafeUnref(AsVertices(cvertices));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////

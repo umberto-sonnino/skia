@@ -7,6 +7,7 @@
 
 #include "sk_types_priv.h"
 #include "SkMatrix.h"
+#include "SkImage.h"
 
 static void from_c_matrix(const sk_matrix_t* cmatrix, SkMatrix* matrix) {
     matrix->setAll(cmatrix->mat[0], cmatrix->mat[1], cmatrix->mat[2],
@@ -140,6 +141,11 @@ sk_shader_t* sk_shader_new_two_point_conical_gradient(const sk_point_t* start,
                                                         reinterpret_cast<const SkColor*>(colors),
                                                         reinterpret_cast<const SkScalar*>(colorPos),
                                                         colorCount, mode, 0, &matrix).release();
+}
+
+sk_shader_t* sk_shader_new_image(sk_image_t* cimage) {
+    const SkImage* image = reinterpret_cast<const SkImage*>(cimage);
+    return (sk_shader_t*)image->makeShader().release();
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////

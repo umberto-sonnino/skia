@@ -138,6 +138,12 @@ sk_shader_t* sk_shader_new_two_point_conical_gradient(
         sk_shader_tilemode_t tileMode,
         const sk_matrix_t* localMatrix);
 
+
+/**
+ * Returns an image shader associated with the given sk_image_t.
+*/
+sk_shader_t* sk_shader_new_image(sk_image_t* cimage);
+
 SK_C_PLUS_PLUS_END_GUARD
 
 #endif

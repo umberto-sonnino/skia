@@ -217,6 +217,12 @@ typedef struct sk_shader_t sk_shader_t;
 */
 typedef struct sk_surface_t sk_surface_t;
 
+/**
+    A sk_vertices_t holds the destination for an immutable set of vertex
+    data that can be used with sk_canvas_t
+*/
+typedef struct sk_vertices_t sk_vertices_t;
+
 typedef enum {
     CLEAR_SK_XFERMODE_MODE,
     SRC_SK_XFERMODE_MODE,

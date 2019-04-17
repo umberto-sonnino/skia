@@ -89,7 +89,7 @@ SK_API void sk_canvas_clip_rect(sk_canvas_t*, const sk_rect_t*);
     current clip will be the intersection of the old clip and the
     path.
 */
-SK_API void sk_canvas_clip_path(sk_canvas_t*, const sk_path_t*);
+SK_API void sk_canvas_clip_path(sk_canvas_t*, const sk_path_t*, bool doAntialias);
 
 /**
     Fill the entire canvas (restricted to the current clip) with the
@@ -153,6 +153,10 @@ SK_API void sk_canvas_draw_image_rect(sk_canvas_t*, const sk_image_t*,
 */
 SK_API void sk_canvas_draw_picture(sk_canvas_t*, const sk_picture_t*,
                                    const sk_matrix_t*, const sk_paint_t*);
+
+SK_API void sk_canvas_draw_vertices(sk_canvas_t* ccanvas, 
+                                    const sk_vertices_t* cvertices, 
+                                    const sk_paint_t* cpaint);
 
 SK_API void sk_canvas_flush(sk_canvas_t* ccanvas);
 
