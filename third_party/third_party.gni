@@ -3,6 +3,10 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+declare_args() {
+  skia_use_bitcode = false
+}
+
 template("third_party") {
   enabled = !defined(invoker.enabled) || invoker.enabled
   config(target_name + "_public") {
@@ -30,6 +34,10 @@ template("third_party") {
       }
     } else {
       not_needed(invoker, "*")
+    }
+
+    if(skia_use_bitcode) {
+      cflags += [ "-fembed-bitcode" ]
     }
   }
 

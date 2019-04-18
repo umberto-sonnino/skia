@@ -465,10 +465,16 @@ config("optimize") {
     ]
   } else {
     cflags = [
-      "-O3",
-      "-fdata-sections",
-      "-ffunction-sections",
+      "-O3"
     ]
+    
+    if(!is_ios) {
+      cflags += [ 
+        "-fdata-sections",
+        "-ffunction-sections"
+      ]
+    }
+
     if (is_mac || is_ios) {
       ldflags = [ "-dead_strip" ]
     } else {
