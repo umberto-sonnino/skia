@@ -14,6 +14,9 @@
 #include "include/core/SkPath.h"
 #include "include/core/SkPictureRecorder.h"
 #include "include/core/SkSurface.h"
+#include "include/gpu/GrContext.h"
+#include "include/gpu/gl/GrGLInterface.h"
+#include "src/gpu/gl/GrGLUtil.h"
 
 #include "include/c/sk_canvas.h"
 #include "include/c/sk_data.h"
