@@ -5,21 +5,21 @@
  * found in the LICENSE file.
  */
 
-#include "GrColorSpaceXform.h"
-#include "GrImageTextureMaker.h"
-#include "SkGr.h"
-#include "SkImage_GpuYUVA.h"
-#include "SkImage_Lazy.h"
-#include "effects/GrYUVtoRGBEffect.h"
+#include "src/gpu/GrImageTextureMaker.h"
+
+#include "src/gpu/GrColorSpaceXform.h"
+#include "src/gpu/SkGr.h"
+#include "src/gpu/effects/GrYUVtoRGBEffect.h"
+#include "src/image/SkImage_GpuYUVA.h"
+#include "src/image/SkImage_Lazy.h"
 
 GrImageTextureMaker::GrImageTextureMaker(GrRecordingContext* context, const SkImage* client,
                                          SkImage::CachingHint chint, bool useDecal)
-        : INHERITED(context, client->width(), client->height(), client->isAlphaOnly(), useDecal)
+        : INHERITED(context, client->imageInfo(), useDecal)
         , fImage(static_cast<const SkImage_Lazy*>(client))
         , fCachingHint(chint) {
     SkASSERT(client->isLazyGenerated());
-    GrMakeKeyFromImageID(&fOriginalKey, client->uniqueID(),
-                         SkIRect::MakeWH(this->width(), this->height()));
+    GrMakeKeyFromImageID(&fOriginalKey, client->uniqueID(), SkIRect::MakeSize(this->dimensions()));
 }
 
 sk_sp<GrTextureProxy> GrImageTextureMaker::refOriginalTextureProxy(bool willBeMipped,
@@ -36,22 +36,15 @@ void GrImageTextureMaker::makeCopyKey(const CopyParams& stretch, GrUniqueKey* pa
     }
 }
 
-SkAlphaType GrImageTextureMaker::alphaType() const {
-    return fImage->alphaType();
-}
-SkColorSpace* GrImageTextureMaker::colorSpace() const {
-    return fImage->colorSpace();
-}
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 GrYUVAImageTextureMaker::GrYUVAImageTextureMaker(GrContext* context, const SkImage* client,
                                                  bool useDecal)
-    : INHERITED(context, client->width(), client->height(), client->isAlphaOnly(), useDecal)
-    , fImage(static_cast<const SkImage_GpuYUVA*>(client)) {
+        : INHERITED(context, client->imageInfo(), useDecal)
+        , fImage(static_cast<const SkImage_GpuYUVA*>(client)) {
     SkASSERT(as_IB(client)->isYUVA());
-    GrMakeKeyFromImageID(&fOriginalKey, client->uniqueID(),
-                         SkIRect::MakeWH(this->width(), this->height()));
+    GrMakeKeyFromImageID(&fOriginalKey, client->uniqueID(), SkIRect::MakeSize(this->dimensions()));
 }
 
 sk_sp<GrTextureProxy> GrYUVAImageTextureMaker::refOriginalTextureProxy(bool willBeMipped,
@@ -77,13 +70,6 @@ void GrYUVAImageTextureMaker::makeCopyKey(const CopyParams& stretch, GrUniqueKey
     }
 }
 
-SkAlphaType GrYUVAImageTextureMaker::alphaType() const {
-    return fImage->alphaType();
-}
-SkColorSpace* GrYUVAImageTextureMaker::colorSpace() const {
-    return fImage->colorSpace();
-}
-
 std::unique_ptr<GrFragmentProcessor> GrYUVAImageTextureMaker::createFragmentProcessor(
     const SkMatrix& textureMatrix,
     const SkRect& constraintRect,
@@ -91,8 +77,9 @@ std::unique_ptr<GrFragmentProcessor> GrYUVAImageTextureMaker::createFragmentProc
     bool coordsLimitedToConstraintRect,
     const GrSamplerState::Filter* filterOrNullForBicubic) {
 
-    // Check simple cases to see if we need to fall back to flattening the image
-    if (!filterOrNullForBicubic || this->domainNeedsDecal()) {
+    // Check simple cases to see if we need to fall back to flattening the image (or whether it's
+    // already been flattened.)
+    if (!filterOrNullForBicubic || this->domainNeedsDecal() || fImage->fRGBProxy) {
         return this->INHERITED::createFragmentProcessor(textureMatrix, constraintRect,
                                                         filterConstraint,
                                                         coordsLimitedToConstraintRect,

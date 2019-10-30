@@ -11,13 +11,16 @@
 #include <set>
 #include <unordered_set>
 #include <vector>
-#include "ir/SkSLProgram.h"
-#include "ir/SkSLSymbolTable.h"
-#include "SkSLByteCode.h"
-#include "SkSLCFGGenerator.h"
-#include "SkSLContext.h"
-#include "SkSLErrorReporter.h"
-#include "SkSLLexer.h"
+#include "src/sksl/SkSLCFGGenerator.h"
+#include "src/sksl/SkSLContext.h"
+#include "src/sksl/SkSLErrorReporter.h"
+#include "src/sksl/SkSLLexer.h"
+#include "src/sksl/ir/SkSLProgram.h"
+#include "src/sksl/ir/SkSLSymbolTable.h"
+
+#if !defined(SKSL_STANDALONE) && SK_SUPPORT_GPU
+#include "src/gpu/GrShaderVar.h"
+#endif
 
 #define SK_FRAGCOLOR_BUILTIN           10001
 #define SK_IN_BUILTIN                  10002
@@ -33,6 +36,7 @@
 #define SK_HEIGHT_BUILTIN              10012
 #define SK_FRAGCOORD_BUILTIN              15
 #define SK_CLOCKWISE_BUILTIN              17
+#define SK_SAMPLEMASK_BUILTIN             20
 #define SK_VERTEXID_BUILTIN               42
 #define SK_INSTANCEID_BUILTIN             43
 #define SK_CLIPDISTANCE_BUILTIN            3
@@ -41,6 +45,8 @@
 
 namespace SkSL {
 
+class ByteCode;
+class ExternalValue;
 class IRGenerator;
 
 /**
@@ -68,8 +74,11 @@ public:
         enum class Kind {
             kInput,
             kOutput,
+            kCoordX,
+            kCoordY,
             kUniform,
-            kChildProcessor
+            kChildProcessor,
+            kFunctionName
         };
 
         FormatArg(Kind kind)
@@ -84,12 +93,29 @@ public:
         int fIndex;
     };
 
+#if !defined(SKSL_STANDALONE) && SK_SUPPORT_GPU
+    /**
+     * Represents the arguments to GrGLSLShaderBuilder::emitFunction.
+     */
+    struct GLSLFunction {
+        GrSLType fReturnType;
+        SkString fName;
+        std::vector<GrShaderVar> fParameters;
+        SkString fBody;
+    };
+#endif
+
     Compiler(Flags flags = kNone_Flags);
 
     ~Compiler() override;
 
     Compiler(const Compiler&) = delete;
     Compiler& operator=(const Compiler&) = delete;
+
+    /**
+     * Registers an ExternalValue as a top-level symbol which is visible in the global namespace.
+     */
+    void registerExternalValue(ExternalValue* value);
 
     std::unique_ptr<Program> convertProgram(Program::Kind kind, String text,
                                             const Program::Settings& settings);
@@ -117,8 +143,16 @@ public:
 
     std::unique_ptr<ByteCode> toByteCode(Program& program);
 
+#if !defined(SKSL_STANDALONE) && SK_SUPPORT_GPU
     bool toPipelineStage(const Program& program, String* out,
-                         std::vector<FormatArg>* outFormatArgs);
+                         std::vector<FormatArg>* outFormatArgs,
+                         std::vector<GLSLFunction>* outFunctions);
+#endif
+
+    /**
+     * Takes ownership of the given symbol. It will be destroyed when the compiler is destroyed.
+     */
+    Symbol* takeOwnership(std::unique_ptr<Symbol> symbol);
 
     void error(int offset, String msg) override;
 
@@ -139,6 +173,11 @@ public:
     static bool IsAssignment(Token::Kind token);
 
 private:
+    void processIncludeFile(Program::Kind kind, const char* src, size_t length,
+                            std::shared_ptr<SymbolTable> base,
+                            std::vector<std::unique_ptr<ProgramElement>>* outElements,
+                            std::shared_ptr<SymbolTable>* outSymbolTable);
+
     void addDefinition(const Expression* lvalue, std::unique_ptr<Expression>* expr,
                        DefinitionMap* definitions);
 
@@ -174,12 +213,17 @@ private:
 
     Position position(int offset);
 
+    std::shared_ptr<SymbolTable> fGpuSymbolTable;
     std::vector<std::unique_ptr<ProgramElement>> fVertexInclude;
     std::shared_ptr<SymbolTable> fVertexSymbolTable;
     std::vector<std::unique_ptr<ProgramElement>> fFragmentInclude;
     std::shared_ptr<SymbolTable> fFragmentSymbolTable;
     std::vector<std::unique_ptr<ProgramElement>> fGeometryInclude;
     std::shared_ptr<SymbolTable> fGeometrySymbolTable;
+    std::vector<std::unique_ptr<ProgramElement>> fPipelineInclude;
+    std::shared_ptr<SymbolTable> fPipelineSymbolTable;
+    std::vector<std::unique_ptr<ProgramElement>> fInterpreterInclude;
+    std::shared_ptr<SymbolTable> fInterpreterSymbolTable;
 
     std::shared_ptr<SymbolTable> fTypes;
     IRGenerator* fIRGenerator;

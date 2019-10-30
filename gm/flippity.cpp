@@ -5,14 +5,36 @@
  * found in the LICENSE file.
  */
 
-#include "ToolUtils.h"
-#include "gm.h"
+#include "gm/gm.h"
+#include "include/core/SkBitmap.h"
+#include "include/core/SkCanvas.h"
+#include "include/core/SkColor.h"
+#include "include/core/SkFont.h"
+#include "include/core/SkFontTypes.h"
+#include "include/core/SkImage.h"
+#include "include/core/SkImageInfo.h"
+#include "include/core/SkMatrix.h"
+#include "include/core/SkPaint.h"
+#include "include/core/SkPoint.h"
+#include "include/core/SkRect.h"
+#include "include/core/SkRefCnt.h"
+#include "include/core/SkSize.h"
+#include "include/core/SkString.h"
+#include "include/core/SkSurface.h"
+#include "include/core/SkTypeface.h"
+#include "include/core/SkTypes.h"
+#include "include/gpu/GrContext.h"
+#include "include/gpu/GrTypes.h"
+#include "include/private/SkTArray.h"
+#include "src/image/SkImage_Base.h"
+#include "src/image/SkImage_Gpu.h"
+#include "tools/ToolUtils.h"
+#include "tools/gpu/ProxyUtils.h"
 
-#include "SkSurface.h"
+#include <string.h>
+#include <utility>
 
-#include "GrContextPriv.h"
-#include "ProxyUtils.h"
-#include "SkImage_Gpu.h"
+class GrRenderTargetContext;
 
 static const int kNumMatrices = 6;
 static const int kImageSize = 128;
@@ -68,7 +90,7 @@ static sk_sp<SkImage> make_text_image(GrContext* context, const char* text, SkCo
     font.setSize(32);
 
     SkRect bounds;
-    font.measureText(text, strlen(text), kUTF8_SkTextEncoding, &bounds);
+    font.measureText(text, strlen(text), SkTextEncoding::kUTF8, &bounds);
     const SkMatrix mat = SkMatrix::MakeRectToRect(bounds, SkRect::MakeWH(kLabelSize, kLabelSize),
                                                   SkMatrix::kFill_ScaleToFit);
 
@@ -79,11 +101,11 @@ static sk_sp<SkImage> make_text_image(GrContext* context, const char* text, SkCo
 
     canvas->clear(SK_ColorWHITE);
     canvas->concat(mat);
-    canvas->drawSimpleText(text, strlen(text), kUTF8_SkTextEncoding, 0, 0, font, paint);
+    canvas->drawSimpleText(text, strlen(text), SkTextEncoding::kUTF8, 0, 0, font, paint);
 
     sk_sp<SkImage> image = surf->makeImageSnapshot();
 
-    return image->makeTextureImage(context, nullptr);
+    return image->makeTextureImage(context);
 }
 
 // Create an image with each corner marked w/ "LL", "LR", etc., with the origin either bottom-left
@@ -108,9 +130,8 @@ static sk_sp<SkImage> make_reference_image(GrContext* context,
 
     auto origin = bottomLeftOrigin ? kBottomLeft_GrSurfaceOrigin : kTopLeft_GrSurfaceOrigin;
 
-    auto proxy = sk_gpu_test::MakeTextureProxyFromData(context, false, kImageSize, kImageSize,
-                                                       bm.colorType(), origin, bm.getPixels(),
-                                                       bm.rowBytes());
+    auto proxy = sk_gpu_test::MakeTextureProxyFromData(context, GrRenderable::kNo, origin,
+                                                       bm.info(), bm.getPixels(), bm.rowBytes());
     if (!proxy) {
         return nullptr;
     }
@@ -145,8 +166,7 @@ public:
         this->setBGColor(0xFFCCCCCC);
     }
 
-protected:
-
+private:
     SkString onShortName() override {
         return SkString("flippity");
     }
@@ -209,6 +229,10 @@ protected:
     }
 
     void makeLabels(GrContext* context) {
+        if (fLabels.count()) {
+            return;
+        }
+
         static const char* kLabelText[kNumLabels] = { "LL", "LR", "UL", "UR" };
 
         static const SkColor kLabelColors[kNumLabels] = {
@@ -218,7 +242,6 @@ protected:
             SK_ColorCYAN
         };
 
-        SkASSERT(!fLabels.count());
         for (int i = 0; i < kNumLabels; ++i) {
             fLabels.push_back(make_text_image(context, kLabelText[i], kLabelColors[i]));
         }

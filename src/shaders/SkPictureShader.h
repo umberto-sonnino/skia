@@ -8,8 +8,8 @@
 #ifndef SkPictureShader_DEFINED
 #define SkPictureShader_DEFINED
 
-#include "SkShaderBase.h"
-#include "SkTileMode.h"
+#include "include/core/SkTileMode.h"
+#include "src/shaders/SkShaderBase.h"
 #include <atomic>
 
 class SkArenaAlloc;
@@ -32,6 +32,8 @@ public:
 #if SK_SUPPORT_GPU
     std::unique_ptr<GrFragmentProcessor> asFragmentProcessor(const GrFPArgs&) const override;
 #endif
+
+    SkPicture* isAPicture(SkMatrix*, SkTileMode[2], SkRect* tile) const override;
 
 protected:
     SkPictureShader(SkReadBuffer&);

@@ -5,13 +5,13 @@
  * found in the LICENSE file.
  */
 
-#include "GrContext.h"
-#include "GrContextPriv.h"
-#include "GrMemoryPool.h"
-#include "GrOpFlushState.h"
-#include "GrRenderTargetOpList.h"
-#include "Test.h"
-#include "ops/GrOp.h"
+#include "include/gpu/GrContext.h"
+#include "src/gpu/GrContextPriv.h"
+#include "src/gpu/GrMemoryPool.h"
+#include "src/gpu/GrOpFlushState.h"
+#include "src/gpu/GrOpsTask.h"
+#include "src/gpu/ops/GrOp.h"
+#include "tests/Test.h"
 
 // We create Ops that write a value into a range of a buffer. We create ranges from
 // kNumOpPositions starting positions x kRanges canonical ranges. We repeat each range kNumRepeats
@@ -119,7 +119,7 @@ private:
             : INHERITED(ClassID()), fResult(result), fCombinable(combinable) {
         fValueRanges.push_back({value, range});
         this->setBounds(SkRect::MakeXYWH(range.fOffset, 0, range.fOffset + range.fLength, 1),
-                        HasAABloat::kNo, IsZeroArea::kNo);
+                        HasAABloat::kNo, IsHairline::kNo);
     }
 
     void onPrepare(GrOpFlushState*) override {}
@@ -166,16 +166,21 @@ DEF_GPUTEST(OpChainTest, reporter, /*ctxInfo*/) {
     desc.fConfig = kRGBA_8888_GrPixelConfig;
     desc.fWidth = kNumOps + 1;
     desc.fHeight = 1;
-    desc.fFlags = kRenderTarget_GrSurfaceFlag;
 
     const GrBackendFormat format =
-            context->priv().caps()->getBackendFormatFromColorType(kRGBA_8888_SkColorType);
+        context->priv().caps()->getDefaultBackendFormat(GrColorType::kRGBA_8888,
+                                                        GrRenderable::kYes);
 
+    static const GrSurfaceOrigin kOrigin = kTopLeft_GrSurfaceOrigin;
     auto proxy = context->priv().proxyProvider()->createProxy(
-            format, desc, kTopLeft_GrSurfaceOrigin, GrMipMapped::kNo, SkBackingFit::kExact,
-            SkBudgeted::kNo, GrInternalSurfaceFlags::kNoPendingIO);
+            format, desc, GrRenderable::kYes, 1, kOrigin, GrMipMapped::kNo,
+            SkBackingFit::kExact, SkBudgeted::kNo, GrProtected::kNo, GrInternalSurfaceFlags::kNone);
     SkASSERT(proxy);
     proxy->instantiate(context->priv().resourceProvider());
+
+    GrSwizzle outSwizzle = context->priv().caps()->getOutputSwizzle(format,
+                                                                    GrColorType::kRGBA_8888);
+
     int result[result_width()];
     int validResult[result_width()];
 
@@ -204,12 +209,10 @@ DEF_GPUTEST(OpChainTest, reporter, /*ctxInfo*/) {
                 GrTokenTracker tracker;
                 GrOpFlushState flushState(context->priv().getGpu(),
                                           context->priv().resourceProvider(),
-                                          context->priv().getResourceCache(),
                                           &tracker);
-                GrRenderTargetOpList opList(context->priv().resourceProvider(),
-                                            sk_ref_sp(context->priv().opMemoryPool()),
-                                            proxy->asRenderTargetProxy(),
-                                            context->priv().auditTrail());
+                GrOpsTask opsTask(context->priv().refOpMemoryPool(),
+                                  GrSurfaceProxyView(proxy, kOrigin, outSwizzle),
+                                  context->priv().auditTrail());
                 // This assumes the particular values of kRanges.
                 std::fill_n(result, result_width(), -1);
                 std::fill_n(validResult, result_width(), -1);
@@ -223,12 +226,14 @@ DEF_GPUTEST(OpChainTest, reporter, /*ctxInfo*/) {
                     range.fOffset += pos;
                     auto op = TestOp::Make(context.get(), value, range, result, &combinable);
                     op->writeResult(validResult);
-                    opList.addOp(std::move(op), *context->priv().caps());
+                    opsTask.addOp(std::move(op),
+                                  GrTextureResolveManager(context->priv().drawingManager()),
+                                  *context->priv().caps());
                 }
-                opList.makeClosed(*context->priv().caps());
-                opList.prepare(&flushState);
-                opList.execute(&flushState);
-                opList.endFlush();
+                opsTask.makeClosed(*context->priv().caps());
+                opsTask.prepare(&flushState);
+                opsTask.execute(&flushState);
+                opsTask.endFlush();
 #if 0  // Useful to repeat a random configuration that fails the test while debugger attached.
                 if (!std::equal(result, result + result_width(), validResult)) {
                     repeat = true;

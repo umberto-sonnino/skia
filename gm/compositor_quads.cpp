@@ -5,21 +5,45 @@
  * found in the LICENSE file.
  */
 
-#include "gm.h"
+// This test only works with the GPU backend.
 
-#if SK_SUPPORT_GPU
-
-#include "Resources.h"
-#include "SkColorMatrixFilter.h"
-#include "SkFont.h"
-#include "SkGradientShader.h"
-#include "SkLineClipper.h"
-#include "SkMorphologyImageFilter.h"
-#include "SkPaintFilterCanvas.h"
-#include "SkShaderMaskFilter.h"
-#include "YUVUtils.h"
+#include "gm/gm.h"
+#include "include/core/SkBitmap.h"
+#include "include/core/SkBlendMode.h"
+#include "include/core/SkCanvas.h"
+#include "include/core/SkColor.h"
+#include "include/core/SkColorFilter.h"
+#include "include/core/SkData.h"
+#include "include/core/SkFilterQuality.h"
+#include "include/core/SkFont.h"
+#include "include/core/SkImage.h"
+#include "include/core/SkImageFilter.h"
+#include "include/core/SkImageInfo.h"
+#include "include/core/SkMaskFilter.h"
+#include "include/core/SkMatrix.h"
+#include "include/core/SkPaint.h"
+#include "include/core/SkPoint.h"
+#include "include/core/SkRect.h"
+#include "include/core/SkRefCnt.h"
+#include "include/core/SkScalar.h"
+#include "include/core/SkShader.h"
+#include "include/core/SkSize.h"
+#include "include/core/SkString.h"
+#include "include/core/SkTileMode.h"
+#include "include/core/SkTypeface.h"
+#include "include/core/SkTypes.h"
+#include "include/effects/SkColorMatrix.h"
+#include "include/effects/SkGradientShader.h"
+#include "include/effects/SkImageFilters.h"
+#include "include/effects/SkShaderMaskFilter.h"
+#include "include/private/SkTArray.h"
+#include "src/core/SkLineClipper.h"
+#include "tools/Resources.h"
+#include "tools/gpu/YUVUtils.h"
 
 #include <array>
+#include <memory>
+#include <utility>
 
 // This GM mimics the draw calls used by complex compositors that focus on drawing rectangles
 // and quadrilaterals with per-edge AA, with complex images, effects, and seamless tiling.
@@ -906,16 +930,16 @@ public:
         SkRect localRect = gridToImage.mapRect(rect);
 
         // drawTextureSet automatically derives appropriate local quad from localRect if clipPtr
-        // is not null.
+        // is not null. Also exercise per-entry alpha combined with YUVA images.
         fSetEntries.push_back(
-                {fImage, localRect, rect, -1, 1.f, this->maskToFlags(edgeAA), hasClip});
+                {fImage, localRect, rect, -1, .5f, this->maskToFlags(edgeAA), hasClip});
         return 0;
     }
 
     void drawBanner(SkCanvas* canvas) override {
         draw_text(canvas, "Texture");
         canvas->translate(0.f, 15.f);
-        draw_text(canvas, "YUV - GPU Only");
+        draw_text(canvas, "YUV + alpha - GPU Only");
     }
 
 private:
@@ -1006,8 +1030,8 @@ static SkTArray<sk_sp<ClipTileRenderer>> make_filtered_renderers() {
 
     SkColorMatrix cm;
     cm.setSaturation(10);
-    sk_sp<SkColorFilter> colorFilter = SkColorFilters::MatrixRowMajor255(cm.fMat);
-    sk_sp<SkImageFilter> imageFilter = SkDilateImageFilter::Make(8, 8, nullptr);
+    sk_sp<SkColorFilter> colorFilter = SkColorFilters::Matrix(cm);
+    sk_sp<SkImageFilter> imageFilter = SkImageFilters::Dilate(8, 8, nullptr);
 
     static constexpr SkColor kAlphas[] = { SK_ColorTRANSPARENT, SK_ColorBLACK };
     auto alphaGradient = SkGradientShader::MakeRadial(
@@ -1035,5 +1059,3 @@ DEF_GM(return new CompositorGM("color", SolidColorRenderer::Make({.2f, .8f, .3f,
 DEF_GM(return new CompositorGM("shader", make_shader_renderers());)
 DEF_GM(return new CompositorGM("image", make_image_renderers());)
 DEF_GM(return new CompositorGM("filter", make_filtered_renderers());)
-
-#endif // SK_SUPPORT_GPU

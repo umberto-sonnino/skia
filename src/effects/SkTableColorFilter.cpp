@@ -5,18 +5,18 @@
  * found in the LICENSE file.
  */
 
-#include "SkTableColorFilter.h"
+#include "include/effects/SkTableColorFilter.h"
 
-#include "SkArenaAlloc.h"
-#include "SkBitmap.h"
-#include "SkColorData.h"
-#include "SkEffectPriv.h"
-#include "SkRasterPipeline.h"
-#include "SkReadBuffer.h"
-#include "SkString.h"
-#include "SkTo.h"
-#include "SkUnPreMultiply.h"
-#include "SkWriteBuffer.h"
+#include "include/core/SkBitmap.h"
+#include "include/core/SkString.h"
+#include "include/core/SkUnPreMultiply.h"
+#include "include/private/SkColorData.h"
+#include "include/private/SkTo.h"
+#include "src/core/SkArenaAlloc.h"
+#include "src/core/SkEffectPriv.h"
+#include "src/core/SkRasterPipeline.h"
+#include "src/core/SkReadBuffer.h"
+#include "src/core/SkWriteBuffer.h"
 
 static const uint8_t gIdentityTable[] = {
     0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
@@ -85,8 +85,8 @@ public:
     ~SkTable_ColorFilter() override { delete fBitmap; }
 
 #if SK_SUPPORT_GPU
-    std::unique_ptr<GrFragmentProcessor> asFragmentProcessor(
-            GrRecordingContext*, const GrColorSpaceInfo&) const override;
+    std::unique_ptr<GrFragmentProcessor> asFragmentProcessor(GrRecordingContext*,
+                                                             const GrColorInfo&) const override;
 #endif
 
     enum {
@@ -147,7 +147,7 @@ static const uint8_t gCountNibBits[] = {
     2, 3, 3, 4
 };
 
-#include "SkPackBits.h"
+#include "src/effects/SkPackBits.h"
 
 void SkTable_ColorFilter::flatten(SkWriteBuffer& buffer) const {
     uint8_t storage[5*256];
@@ -233,15 +233,15 @@ void SkTable_ColorFilter::getTableAsBitmap(SkBitmap* table) const {
 
 #if SK_SUPPORT_GPU
 
-#include "GrColorSpaceInfo.h"
-#include "GrFragmentProcessor.h"
-#include "GrRecordingContext.h"
-#include "GrRecordingContextPriv.h"
-#include "SkGr.h"
-#include "glsl/GrGLSLFragmentProcessor.h"
-#include "glsl/GrGLSLFragmentShaderBuilder.h"
-#include "glsl/GrGLSLProgramDataManager.h"
-#include "glsl/GrGLSLUniformHandler.h"
+#include "include/private/GrRecordingContext.h"
+#include "src/gpu/GrColorInfo.h"
+#include "src/gpu/GrFragmentProcessor.h"
+#include "src/gpu/GrRecordingContextPriv.h"
+#include "src/gpu/SkGr.h"
+#include "src/gpu/glsl/GrGLSLFragmentProcessor.h"
+#include "src/gpu/glsl/GrGLSLFragmentShaderBuilder.h"
+#include "src/gpu/glsl/GrGLSLProgramDataManager.h"
+#include "src/gpu/glsl/GrGLSLUniformHandler.h"
 
 class ColorTableEffect : public GrFragmentProcessor {
 public:
@@ -374,7 +374,7 @@ GR_DEFINE_FRAGMENT_PROCESSOR_TEST(ColorTableEffect);
 
 #if GR_TEST_UTILS
 
-#include "GrContext.h"
+#include "include/gpu/GrContext.h"
 
 std::unique_ptr<GrFragmentProcessor> ColorTableEffect::TestCreate(GrProcessorTestData* d) {
     int flags = 0;
@@ -399,14 +399,15 @@ std::unique_ptr<GrFragmentProcessor> ColorTableEffect::TestCreate(GrProcessorTes
     ));
     sk_sp<SkColorSpace> colorSpace = GrTest::TestColorSpace(d->fRandom);
     auto fp = filter->asFragmentProcessor(
-            d->context(), GrColorSpaceInfo(std::move(colorSpace), kRGBA_8888_GrPixelConfig));
+            d->context(),
+            GrColorInfo(GrColorType::kRGBA_8888, kUnknown_SkAlphaType, std::move(colorSpace)));
     SkASSERT(fp);
     return fp;
 }
 #endif
 
 std::unique_ptr<GrFragmentProcessor> SkTable_ColorFilter::asFragmentProcessor(
-        GrRecordingContext* context, const GrColorSpaceInfo&) const {
+        GrRecordingContext* context, const GrColorInfo&) const {
     SkBitmap bitmap;
     this->getTableAsBitmap(&bitmap);
 

@@ -8,12 +8,12 @@
 #ifndef SkImage_Gpu_DEFINED
 #define SkImage_Gpu_DEFINED
 
-#include "GrContext.h"
-#include "GrGpuResourcePriv.h"
-#include "GrSurfaceProxyPriv.h"
-#include "SkGr.h"
-#include "SkImagePriv.h"
-#include "SkImage_GpuBase.h"
+#include "include/gpu/GrContext.h"
+#include "src/core/SkImagePriv.h"
+#include "src/gpu/GrGpuResourcePriv.h"
+#include "src/gpu/GrSurfaceProxyPriv.h"
+#include "src/gpu/SkGr.h"
+#include "src/image/SkImage_GpuBase.h"
 
 class GrTexture;
 
@@ -26,6 +26,8 @@ public:
                 sk_sp<SkColorSpace>);
     ~SkImage_Gpu() override;
 
+    GrSemaphoresSubmitted onFlush(GrContext*, const GrFlushInfo&) override;
+
     GrTextureProxy* peekProxy() const override {
         return fProxy.get();
     }
@@ -37,6 +39,8 @@ public:
 
     sk_sp<SkImage> onMakeColorTypeAndColorSpace(GrRecordingContext*,
                                                 SkColorType, sk_sp<SkColorSpace>) const final;
+
+    sk_sp<SkImage> onReinterpretColorSpace(sk_sp<SkColorSpace>) const final;
 
     /**
      * This is the implementation of SkDeferredDisplayListRecorder::makePromiseImage.

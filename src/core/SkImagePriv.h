@@ -8,9 +8,9 @@
 #ifndef SkImagePriv_DEFINED
 #define SkImagePriv_DEFINED
 
-#include "SkImage.h"
-#include "SkSurface.h"
-#include "SkTileMode.h"
+#include "include/core/SkImage.h"
+#include "include/core/SkSurface.h"
+#include "include/core/SkTileMode.h"
 
 enum SkCopyPixelsMode {
     kIfMutable_SkCopyPixelsMode,  //!< only copy src pixels if they are marked mutable
@@ -90,12 +90,5 @@ void SkImage_unpinAsTexture(const SkImage*, GrContext*);
  *  this returns (0,0,width,height). For a lazy-image, it may return a subset of that rect.
  */
 SkIRect SkImage_getSubset(const SkImage*);
-
-/**
- *  Returns a new image containing the same pixel values as the source, but with a different color
- *  space assigned. This performs no color space conversion. Primarily used in tests, to visualize
- *  the results of rendering in wide or narrow gamuts.
- */
-sk_sp<SkImage> SkImageMakeRasterCopyAndAssignColorSpace(const SkImage*, SkColorSpace*);
 
 #endif

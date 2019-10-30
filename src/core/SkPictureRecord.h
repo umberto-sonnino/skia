@@ -8,17 +8,17 @@
 #ifndef SkPictureRecord_DEFINED
 #define SkPictureRecord_DEFINED
 
-#include "SkCanvas.h"
-#include "SkCanvasVirtualEnforcer.h"
-#include "SkFlattenable.h"
-#include "SkPicture.h"
-#include "SkPictureData.h"
-#include "SkTArray.h"
-#include "SkTDArray.h"
-#include "SkTHash.h"
-#include "SkTo.h"
-#include "SkVertices.h"
-#include "SkWriter32.h"
+#include "include/core/SkCanvas.h"
+#include "include/core/SkCanvasVirtualEnforcer.h"
+#include "include/core/SkFlattenable.h"
+#include "include/core/SkPicture.h"
+#include "include/core/SkVertices.h"
+#include "include/private/SkTArray.h"
+#include "include/private/SkTDArray.h"
+#include "include/private/SkTHash.h"
+#include "include/private/SkTo.h"
+#include "src/core/SkPictureData.h"
+#include "src/core/SkWriter32.h"
 
 // These macros help with packing and unpacking a single byte value and
 // a 3 byte value into/out of a uint32_t
@@ -32,6 +32,8 @@
 class SkPictureRecord : public SkCanvasVirtualEnforcer<SkCanvas> {
 public:
     SkPictureRecord(const SkISize& dimensions, uint32_t recordFlags);
+
+    SkPictureRecord(const SkIRect& dimensions, uint32_t recordFlags);
 
     const SkTArray<sk_sp<const SkPicture>>& getPictures() const {
         return fPictures;
@@ -174,6 +176,7 @@ protected:
                      SkBlendMode, const SkRect*, const SkPaint*) override;
 
     void onDrawPaint(const SkPaint&) override;
+    void onDrawBehind(const SkPaint&) override;
     void onDrawPoints(PointMode, size_t count, const SkPoint pts[], const SkPaint&) override;
     void onDrawRect(const SkRect&, const SkPaint&) override;
     void onDrawRegion(const SkRegion&, const SkPaint&) override;
@@ -203,7 +206,7 @@ protected:
     void onDrawDrawable(SkDrawable*, const SkMatrix*) override;
     void onDrawAnnotation(const SkRect&, const char[], SkData*) override;
 
-    void onDrawEdgeAAQuad(const SkRect&, const SkPoint[4], QuadAAFlags, SkColor,
+    void onDrawEdgeAAQuad(const SkRect&, const SkPoint[4], QuadAAFlags, const SkColor4f&,
                           SkBlendMode) override;
     void onDrawEdgeAAImageSet(const ImageSetEntry[], int count, const SkPoint[], const SkMatrix[],
                               const SkPaint*, SrcRectConstraint) override;

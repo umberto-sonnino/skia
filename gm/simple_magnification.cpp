@@ -5,11 +5,28 @@
  * found in the LICENSE file.
  */
 
-#include "gm.h"
-#include "SkColorPriv.h"
-#include "SkImageSource.h"
-#include "SkMagnifierImageFilter.h"
-#include "SkSurface.h"
+#include "gm/gm.h"
+#include "include/core/SkBitmap.h"
+#include "include/core/SkCanvas.h"
+#include "include/core/SkColor.h"
+#include "include/core/SkColorPriv.h"
+#include "include/core/SkImage.h"
+#include "include/core/SkImageFilter.h"
+#include "include/core/SkImageInfo.h"
+#include "include/core/SkPaint.h"
+#include "include/core/SkPoint.h"
+#include "include/core/SkRect.h"
+#include "include/core/SkRefCnt.h"
+#include "include/core/SkSize.h"
+#include "include/core/SkString.h"
+#include "include/core/SkSurface.h"
+#include "include/core/SkTypes.h"
+#include "include/effects/SkImageFilters.h"
+#include "include/gpu/GrTypes.h"
+
+#include <utility>
+
+class GrContext;
 
 static sk_sp<SkImage> make_image(GrContext* context, int size, GrSurfaceOrigin origin) {
     if (context) {
@@ -80,10 +97,10 @@ protected:
     }
 
     void draw(SkCanvas* canvas, sk_sp<SkImage> image, const SkIPoint& offset, int inset) {
-        sk_sp<SkImageFilter> imgSrc(SkImageSource::Make(std::move(image)));
+        sk_sp<SkImageFilter> imgSrc(SkImageFilters::Image(std::move(image)));
 
         SkRect srcRect = SkRect::MakeXYWH(1.0f, 1.0f, 2.0f, 2.0f);
-        sk_sp<SkImageFilter> magFilter(SkMagnifierImageFilter::Make(srcRect, inset, imgSrc));
+        sk_sp<SkImageFilter> magFilter(SkImageFilters::Magnifier(srcRect, inset, imgSrc));
 
         SkPaint paint;
         paint.setImageFilter(std::move(magFilter));

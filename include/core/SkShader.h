@@ -8,13 +8,13 @@
 #ifndef SkShader_DEFINED
 #define SkShader_DEFINED
 
-#include "SkBlendMode.h"
-#include "SkColor.h"
-#include "SkFilterQuality.h"
-#include "SkFlattenable.h"
-#include "SkImageInfo.h"
-#include "SkMatrix.h"
-#include "SkTileMode.h"
+#include "include/core/SkBlendMode.h"
+#include "include/core/SkColor.h"
+#include "include/core/SkFilterQuality.h"
+#include "include/core/SkFlattenable.h"
+#include "include/core/SkImageInfo.h"
+#include "include/core/SkMatrix.h"
+#include "include/core/SkTileMode.h"
 
 class SkArenaAlloc;
 class SkBitmap;
@@ -127,14 +127,6 @@ public:
      */
     sk_sp<SkShader> makeWithColorFilter(sk_sp<SkColorFilter>) const;
 
-    //////////////////////////////////////////////////////////////////////////
-    //  Factory methods for stock shaders
-
-#ifdef SK_SUPPORT_LEGACY_SHADER_LOCALMATRIX
-    SkMatrix getLocalMatrix() const;
-    sk_sp<SkShader> makeAsALocalMatrixShader(SkMatrix* localMatrix) const;
-#endif
-
 private:
     SkShader() = default;
     friend class SkShaderBase;
@@ -147,10 +139,13 @@ public:
     static sk_sp<SkShader> Empty();
     static sk_sp<SkShader> Color(SkColor);
     static sk_sp<SkShader> Color(const SkColor4f&, sk_sp<SkColorSpace>);
-    static sk_sp<SkShader> Blend(SkBlendMode mode, sk_sp<SkShader> dst, sk_sp<SkShader> src);
-    static sk_sp<SkShader> Lerp(float t, sk_sp<SkShader> dst, sk_sp<SkShader> src);
+    static sk_sp<SkShader> Blend(SkBlendMode mode, sk_sp<SkShader> dst, sk_sp<SkShader> src,
+                                 const SkMatrix* localMatrix = nullptr);
+    static sk_sp<SkShader> Lerp(float t, sk_sp<SkShader> dst, sk_sp<SkShader> src,
+                                const SkMatrix* localMatrix = nullptr);
 
-    static sk_sp<SkShader> Lerp(sk_sp<SkShader> red, sk_sp<SkShader> dst, sk_sp<SkShader> src);
+    static sk_sp<SkShader> Lerp(sk_sp<SkShader> red, sk_sp<SkShader> dst, sk_sp<SkShader> src,
+                                const SkMatrix* localMatrix = nullptr);
 
 private:
     SkShaders() = delete;

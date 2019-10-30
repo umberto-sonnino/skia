@@ -5,13 +5,23 @@
  * found in the LICENSE file.
  */
 
-#include "Resources.h"
-#include "SkBlurMask.h"
-#include "SkImage.h"
-#include "SkMaskFilter.h"
-#include "SkPath.h"
-#include "ToolUtils.h"
-#include "gm.h"
+#include "gm/gm.h"
+#include "include/core/SkBlurTypes.h"
+#include "include/core/SkCanvas.h"
+#include "include/core/SkColor.h"
+#include "include/core/SkFont.h"
+#include "include/core/SkMaskFilter.h"
+#include "include/core/SkPaint.h"
+#include "include/core/SkPath.h"
+#include "include/core/SkRect.h"
+#include "include/core/SkRefCnt.h"
+#include "include/core/SkScalar.h"
+#include "include/core/SkTypeface.h"
+#include "include/core/SkTypes.h"
+#include "include/effects/SkBlurImageFilter.h"
+#include "src/core/SkBlurMask.h"
+#include "tools/Resources.h"
+#include "tools/ToolUtils.h"
 
 DEF_SIMPLE_GM_BG(blurs, canvas, 700, 500, 0xFFDDDDDD) {
     SkBlurStyle NONE = SkBlurStyle(-999);
@@ -119,4 +129,12 @@ DEF_SIMPLE_GM(BlurDrawImage, canvas, 256, 256) {
         canvas->scale(0.25, 0.25);
         canvas->drawImage(image, 256, 256, &paint);
     }
+}
+
+DEF_SIMPLE_GM(BlurBigSigma, canvas, 1024, 1024) {
+    SkPaint layerPaint, p;
+
+    p.setImageFilter(SkBlurImageFilter::Make(500, 500, nullptr));
+
+    canvas->drawRect(SkRect::MakeWH(700, 800), p);
 }

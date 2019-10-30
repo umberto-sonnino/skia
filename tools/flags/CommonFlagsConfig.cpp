@@ -5,10 +5,10 @@
  * found in the LICENSE file.
  */
 
-#include "CommonFlagsConfig.h"
-#include "SkColorSpacePriv.h"
-#include "SkImageInfo.h"
-#include "SkTHash.h"
+#include "include/core/SkImageInfo.h"
+#include "include/private/SkTHash.h"
+#include "src/core/SkColorSpacePriv.h"
+#include "tools/flags/CommonFlagsConfig.h"
 
 #include <stdlib.h>
 
@@ -22,7 +22,7 @@ using sk_gpu_test::GrContextFactory;
 
 static const char defaultConfigs[] = "8888 " DEFAULT_GPU_CONFIG
                                      " nonrendering "
-#if defined(SK_BUILD_FOR_WIN)
+#if SK_ANGLE && defined(SK_BUILD_FOR_WIN)
                                      " angle_d3d11_es2"
 #endif
         ;
@@ -40,9 +40,6 @@ static const struct {
     { "glmsaa4",               "gpu", "api=gl,samples=4" },
     { "glmsaa8" ,              "gpu", "api=gl,samples=8" },
     { "glesmsaa4",             "gpu", "api=gles,samples=4" },
-    { "glnvpr4",               "gpu", "api=gl,nvpr=true,samples=4" },
-    { "glnvpr8" ,              "gpu", "api=gl,nvpr=true,samples=8" },
-    { "glesnvpr4",             "gpu", "api=gles,nvpr=true,samples=4" },
     { "glbetex",               "gpu", "api=gl,surf=betex" },
     { "glesbetex",             "gpu", "api=gles,surf=betex" },
     { "glbert",                "gpu", "api=gl,surf=bert" },
@@ -72,6 +69,8 @@ static const struct {
     { "gltestthreading",       "gpu", "api=gl,testThreading=true" },
     { "gltestpersistentcache", "gpu", "api=gl,testPersistentCache=1" },
     { "gltestglslcache",       "gpu", "api=gl,testPersistentCache=2" },
+    { "gltestprecompile",      "gpu", "api=gl,testPrecompile=true" },
+    { "glestestprecompile",    "gpu", "api=gles,testPrecompile=true" },
     { "angle_d3d11_es2",       "gpu", "api=angle_d3d11_es2" },
     { "angle_d3d11_es3",       "gpu", "api=angle_d3d11_es3" },
     { "angle_d3d9_es2",        "gpu", "api=angle_d3d9_es2" },
@@ -85,6 +84,9 @@ static const struct {
     { "angle_gl_es3_msaa8",    "gpu", "api=angle_gl_es3,samples=8" },
     { "commandbuffer",         "gpu", "api=commandbuffer" },
     { "mock",                  "gpu", "api=mock" },
+#ifdef SK_DAWN
+    { "dawn",                  "gpu", "api=dawn" },
+#endif
 #ifdef SK_VULKAN
     { "vk",                    "gpu", "api=vulkan" },
     { "vknostencils",          "gpu", "api=vulkan,stencils=false" },
@@ -126,7 +128,7 @@ static const char configExtendedHelp[] =
         "Extended form: 'backend(option=value,...)'\n\n"
         "Possible backends and options:\n"
         "\n"
-        "gpu[api=string,color=string,dit=bool,nvpr=bool,inst=bool,samples=int]\n"
+        "gpu[api=string,color=string,dit=bool,samples=int]\n"
         "\tapi\ttype: string\trequired\n"
         "\t    Select graphics API to use with gpu backend.\n"
         "\t    Options:\n"
@@ -161,8 +163,6 @@ static const char configExtendedHelp[] =
         "\t\tf16\t\t\tLinearly blended 16-bit floating point.\n"
         "\tdit\ttype: bool\tdefault: false.\n"
         "\t    Use device independent text.\n"
-        "\tnvpr\ttype: bool\tdefault: false.\n"
-        "\t    Use NV_path_rendering OpenGL and OpenGL ES extension.\n"
         "\tsamples\ttype: int\tdefault: 0.\n"
         "\t    Use multisampling with N samples.\n"
         "\tstencils\ttype: bool\tdefault: true.\n"
@@ -270,6 +270,12 @@ static bool parse_option_gpu_api(const SkString&                      value,
 #ifdef SK_METAL
     if (value.equals("metal")) {
         *outContextType = GrContextFactory::kMetal_ContextType;
+        return true;
+    }
+#endif
+#ifdef SK_DAWN
+    if (value.equals("dawn")) {
+        *outContextType = GrContextFactory::kDawn_ContextType;
         return true;
     }
 #endif
@@ -431,7 +437,6 @@ private:
 SkCommandLineConfigGpu::SkCommandLineConfigGpu(const SkString&           tag,
                                                const SkTArray<SkString>& viaParts,
                                                ContextType               contextType,
-                                               bool                      useNVPR,
                                                bool                      useDIText,
                                                int                       samples,
                                                SkColorType               colorType,
@@ -440,6 +445,7 @@ SkCommandLineConfigGpu::SkCommandLineConfigGpu(const SkString&           tag,
                                                bool                      useStencilBuffers,
                                                bool                      testThreading,
                                                int                       testPersistentCache,
+                                               bool                      testPrecompile,
                                                SurfType                  surfType)
         : SkCommandLineConfig(tag, SkString("gpu"), viaParts)
         , fContextType(contextType)
@@ -451,14 +457,8 @@ SkCommandLineConfigGpu::SkCommandLineConfigGpu(const SkString&           tag,
         , fColorSpace(std::move(colorSpace))
         , fTestThreading(testThreading)
         , fTestPersistentCache(testPersistentCache)
+        , fTestPrecompile(testPrecompile)
         , fSurfType(surfType) {
-    if (useNVPR) {
-        fContextOverrides |= ContextOverrides::kRequireNVPRSupport;
-    } else {
-        // We don't disable NVPR for instanced configs. Otherwise the caps wouldn't use mixed
-        // samples and we couldn't test the mixed samples backend for simple shapes.
-        fContextOverrides |= ContextOverrides::kDisableNVPR;
-    }
     if (!useStencilBuffers) {
         fContextOverrides |= ContextOverrides::kAvoidStencilBuffers;
     }
@@ -469,7 +469,6 @@ SkCommandLineConfigGpu* parse_command_line_config_gpu(const SkString&           
                                                       const SkString&           options) {
     // Defaults for GPU backend.
     SkCommandLineConfigGpu::ContextType contextType         = GrContextFactory::kGL_ContextType;
-    bool                                useNVPR             = false;
     bool                                useDIText           = false;
     int                                 samples             = 1;
     SkColorType                         colorType           = kRGBA_8888_SkColorType;
@@ -478,6 +477,7 @@ SkCommandLineConfigGpu* parse_command_line_config_gpu(const SkString&           
     bool                                useStencils         = true;
     bool                                testThreading       = false;
     int                                 testPersistentCache = 0;
+    bool                                testPrecompile      = false;
     SkCommandLineConfigGpu::SurfType    surfType = SkCommandLineConfigGpu::SurfType::kDefault;
 
     bool            parseSucceeded = false;
@@ -488,13 +488,13 @@ SkCommandLineConfigGpu* parse_command_line_config_gpu(const SkString&           
 
     bool validOptions =
             extendedOptions.get_option_gpu_api("api", &contextType, false) &&
-            extendedOptions.get_option_bool("nvpr", &useNVPR) &&
             extendedOptions.get_option_bool("dit", &useDIText) &&
             extendedOptions.get_option_int("samples", &samples) &&
             extendedOptions.get_option_gpu_color("color", &colorType, &alphaType, &colorSpace) &&
             extendedOptions.get_option_bool("stencils", &useStencils) &&
             extendedOptions.get_option_bool("testThreading", &testThreading) &&
             extendedOptions.get_option_int("testPersistentCache", &testPersistentCache) &&
+            extendedOptions.get_option_bool("testPrecompile", &testPrecompile) &&
             extendedOptions.get_option_gpu_surf_type("surf", &surfType);
 
     // testing threading and the persistent cache are mutually exclusive.
@@ -505,7 +505,6 @@ SkCommandLineConfigGpu* parse_command_line_config_gpu(const SkString&           
     return new SkCommandLineConfigGpu(tag,
                                       vias,
                                       contextType,
-                                      useNVPR,
                                       useDIText,
                                       samples,
                                       colorType,
@@ -514,6 +513,7 @@ SkCommandLineConfigGpu* parse_command_line_config_gpu(const SkString&           
                                       useStencils,
                                       testThreading,
                                       testPersistentCache,
+                                      testPrecompile,
                                       surfType);
 }
 

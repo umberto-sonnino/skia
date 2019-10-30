@@ -13,25 +13,25 @@ layout(ctype=SkRect) uniform float4 proxyRect;
 uniform half blurRadius;
 
 @header {
-    #include "GrCaps.h"
-    #include "GrClip.h"
-    #include "GrContext.h"
-    #include "GrPaint.h"
-    #include "GrProxyProvider.h"
-    #include "GrRecordingContext.h"
-    #include "GrRecordingContextPriv.h"
-    #include "GrRenderTargetContext.h"
-    #include "GrStyle.h"
-    #include "SkBlurMaskFilter.h"
-    #include "SkBlurPriv.h"
-    #include "SkGpuBlurUtils.h"
-    #include "SkRRectPriv.h"
+    #include "include/effects/SkBlurMaskFilter.h"
+    #include "include/gpu/GrContext.h"
+    #include "include/private/GrRecordingContext.h"
+    #include "src/core/SkBlurPriv.h"
+    #include "src/core/SkGpuBlurUtils.h"
+    #include "src/core/SkRRectPriv.h"
+    #include "src/gpu/GrCaps.h"
+    #include "src/gpu/GrClip.h"
+    #include "src/gpu/GrPaint.h"
+    #include "src/gpu/GrProxyProvider.h"
+    #include "src/gpu/GrRecordingContextPriv.h"
+    #include "src/gpu/GrRenderTargetContext.h"
+    #include "src/gpu/GrStyle.h"
 }
 
 @class {
     static sk_sp<GrTextureProxy> find_or_create_rrect_blur_mask(GrRecordingContext* context,
                                                                 const SkRRect& rrectToDraw,
-                                                                const SkISize& size,
+                                                                const SkISize& dimensions,
                                                                 float xformedSigma) {
         static const GrUniqueKey::Domain kDomain = GrUniqueKey::GenerateDomain();
         GrUniqueKey key;
@@ -51,15 +51,14 @@ uniform half blurRadius;
         GrProxyProvider* proxyProvider = context->priv().proxyProvider();
 
         sk_sp<GrTextureProxy> mask(proxyProvider->findOrCreateProxyByUniqueKey(
-                                                                 key, kBottomLeft_GrSurfaceOrigin));
+                key, GrColorType::kAlpha_8, kBottomLeft_GrSurfaceOrigin));
         if (!mask) {
-            GrBackendFormat format =
-                context->priv().caps()->getBackendFormatFromColorType(kAlpha_8_SkColorType);
-            // TODO: this could be approx but the texture coords will need to be updated
-            sk_sp<GrRenderTargetContext> rtc(
-                    context->priv().makeDeferredRenderTargetContextWithFallback(
-                                                format, SkBackingFit::kExact, size.fWidth,
-                                                size.fHeight, kAlpha_8_GrPixelConfig, nullptr));
+            // TODO: this could be SkBackingFit::kApprox, but:
+            //   1) The texture coords would need to be updated.
+            //   2) We would have to use GrTextureDomain::kClamp_Mode for the GaussianBlur.
+            auto rtc = context->priv().makeDeferredRenderTargetContextWithFallback(
+                    SkBackingFit::kExact, dimensions.fWidth, dimensions.fHeight,
+                    GrColorType::kAlpha_8, nullptr);
             if (!rtc) {
                 return nullptr;
             }
@@ -75,17 +74,19 @@ uniform half blurRadius;
             if (!srcProxy) {
                 return nullptr;
             }
-            sk_sp<GrRenderTargetContext> rtc2(
+            auto rtc2 =
                       SkGpuBlurUtils::GaussianBlur(context,
                                                    std::move(srcProxy),
+                                                   rtc->colorInfo().colorType(),
+                                                   rtc->colorInfo().alphaType(),
+                                                   SkIPoint::Make(0, 0),
                                                    nullptr,
-                                                   SkIRect::MakeWH(size.fWidth, size.fHeight),
+                                                   SkIRect::MakeSize(dimensions),
                                                    SkIRect::EmptyIRect(),
                                                    xformedSigma,
                                                    xformedSigma,
                                                    GrTextureDomain::kIgnore_Mode,
-                                                   kPremul_SkAlphaType,
-                                                   SkBackingFit::kExact));
+                                                   SkBackingFit::kExact);
             if (!rtc2) {
                 return nullptr;
             }
@@ -131,7 +132,7 @@ uniform half blurRadius;
         // sufficiently small relative to both the size of the corner radius and the
         // width (and height) of the rrect.
         SkRRect rrectToDraw;
-        SkISize size;
+        SkISize dimensions;
         SkScalar ignored[kSkBlurRRectMaxDivisions];
         int ignoredSize;
         uint32_t ignored32;
@@ -139,7 +140,7 @@ uniform half blurRadius;
         bool ninePatchable = SkComputeBlurredRRectParams(srcRRect, devRRect,
                                                          SkRect::MakeEmpty(),
                                                          sigma, xformedSigma,
-                                                         &rrectToDraw, &size,
+                                                         &rrectToDraw, &dimensions,
                                                          ignored, ignored,
                                                          ignored, ignored,
                                                          &ignoredSize, &ignoredSize,
@@ -149,7 +150,7 @@ uniform half blurRadius;
         }
 
         sk_sp<GrTextureProxy> mask(find_or_create_rrect_blur_mask(context, rrectToDraw,
-                                                                  size, xformedSigma));
+                                                                  dimensions, xformedSigma));
         if (!mask) {
             return nullptr;
         }
@@ -193,7 +194,7 @@ void main() {
     half2 proxyDims = half2(2.0 * threshold + 1.0);
     half2 texCoord = translatedFragPos / proxyDims;
 
-    sk_OutColor = sk_InColor * texture(ninePatchSampler, texCoord);
+    sk_OutColor = sk_InColor * sample(ninePatchSampler, texCoord);
 }
 
 @setData(pdman) {

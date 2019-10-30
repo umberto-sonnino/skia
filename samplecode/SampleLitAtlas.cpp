@@ -5,18 +5,17 @@
  * found in the LICENSE file.
  */
 
-#include "AnimTimer.h"
-#include "Sample.h"
-#include "SkBitmapProcShader.h"
-#include "SkCanvas.h"
-#include "SkDrawable.h"
-#include "SkLightingShader.h"
-#include "SkLights.h"
-#include "SkNormalSource.h"
-#include "SkRSXform.h"
-#include "SkRandom.h"
+#include "include/core/SkCanvas.h"
+#include "include/core/SkDrawable.h"
+#include "include/core/SkRSXform.h"
+#include "include/utils/SkRandom.h"
+#include "samplecode/Sample.h"
+#include "src/core/SkNormalSource.h"
+#include "src/shaders/SkBitmapProcShader.h"
+#include "src/shaders/SkLightingShader.h"
+#include "src/shaders/SkLights.h"
 
-#include "ToolUtils.h"
+#include "tools/ToolUtils.h"
 
 // A crude normal mapped asteroids-like sample
 class DrawLitAtlasDrawable : public SkDrawable {
@@ -447,13 +446,9 @@ public:
     DrawLitAtlasView() : fDrawable(new DrawLitAtlasDrawable(SkRect::MakeWH(640, 480))) {}
 
 protected:
-    bool onQuery(Sample::Event* evt) override {
-        if (Sample::TitleQ(*evt)) {
-            Sample::TitleR(evt, "DrawLitAtlas");
-            return true;
-        }
-        SkUnichar uni;
-        if (Sample::CharQ(*evt, &uni)) {
+    SkString name() override { return SkString("DrawLitAtlas"); }
+
+    bool onChar(SkUnichar uni) override {
             switch (uni) {
                 case 'C':
                     fDrawable->toggleUseColors();
@@ -473,15 +468,14 @@ protected:
                 default:
                     break;
             }
-        }
-        return this->INHERITED::onQuery(evt);
+            return false;
     }
 
     void onDrawContent(SkCanvas* canvas) override {
         canvas->drawDrawable(fDrawable.get());
     }
 
-    bool onAnimate(const AnimTimer& timer) override { return true; }
+    bool onAnimate(double nanos) override { return true; }
 
 private:
     sk_sp<DrawLitAtlasDrawable> fDrawable;

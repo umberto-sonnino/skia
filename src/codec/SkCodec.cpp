@@ -5,29 +5,29 @@
  * found in the LICENSE file.
  */
 
-#include "SkBmpCodec.h"
-#include "SkCodec.h"
-#include "SkCodecPriv.h"
-#include "SkColorSpace.h"
-#include "SkData.h"
-#include "SkFrameHolder.h"
-#include "SkHalf.h"
+#include "include/codec/SkCodec.h"
+#include "include/core/SkColorSpace.h"
+#include "include/core/SkData.h"
+#include "include/private/SkHalf.h"
+#include "src/codec/SkBmpCodec.h"
+#include "src/codec/SkCodecPriv.h"
+#include "src/codec/SkFrameHolder.h"
 #ifdef SK_HAS_HEIF_LIBRARY
-#include "SkHeifCodec.h"
+#include "src/codec/SkHeifCodec.h"
 #endif
-#include "SkIcoCodec.h"
-#include "SkJpegCodec.h"
+#include "src/codec/SkIcoCodec.h"
+#include "src/codec/SkJpegCodec.h"
 #ifdef SK_HAS_PNG_LIBRARY
-#include "SkPngCodec.h"
+#include "src/codec/SkPngCodec.h"
 #endif
-#include "SkRawCodec.h"
-#include "SkStream.h"
-#include "SkWbmpCodec.h"
-#include "SkWebpCodec.h"
+#include "include/core/SkStream.h"
+#include "src/codec/SkRawCodec.h"
+#include "src/codec/SkWbmpCodec.h"
+#include "src/codec/SkWebpCodec.h"
 #ifdef SK_HAS_WUFFS_LIBRARY
-#include "SkWuffsCodec.h"
+#include "src/codec/SkWuffsCodec.h"
 #else
-#include "SkGifCodec.h"
+#include "src/codec/SkGifCodec.h"
 #endif
 
 struct DecoderProc {
@@ -35,30 +35,37 @@ struct DecoderProc {
     std::unique_ptr<SkCodec> (*MakeFromStream)(std::unique_ptr<SkStream>, SkCodec::Result*);
 };
 
-static constexpr DecoderProc gDecoderProcs[] = {
-#ifdef SK_HAS_JPEG_LIBRARY
-    { SkJpegCodec::IsJpeg, SkJpegCodec::MakeFromStream },
-#endif
-#ifdef SK_HAS_WEBP_LIBRARY
-    { SkWebpCodec::IsWebp, SkWebpCodec::MakeFromStream },
-#endif
-#ifdef SK_HAS_WUFFS_LIBRARY
-    { SkWuffsCodec_IsFormat, SkWuffsCodec_MakeFromStream },
-#else
-    { SkGifCodec::IsGif, SkGifCodec::MakeFromStream },
-#endif
-#ifdef SK_HAS_PNG_LIBRARY
-    { SkIcoCodec::IsIco, SkIcoCodec::MakeFromStream },
-#endif
-    { SkBmpCodec::IsBmp, SkBmpCodec::MakeFromStream },
-    { SkWbmpCodec::IsWbmp, SkWbmpCodec::MakeFromStream },
-#ifdef SK_HAS_HEIF_LIBRARY
-    { SkHeifCodec::IsHeif, SkHeifCodec::MakeFromStream },
-#endif
-};
+static std::vector<DecoderProc>* decoders() {
+    static auto* decoders = new std::vector<DecoderProc> {
+    #ifdef SK_HAS_JPEG_LIBRARY
+        { SkJpegCodec::IsJpeg, SkJpegCodec::MakeFromStream },
+    #endif
+    #ifdef SK_HAS_WEBP_LIBRARY
+        { SkWebpCodec::IsWebp, SkWebpCodec::MakeFromStream },
+    #endif
+    #ifdef SK_HAS_WUFFS_LIBRARY
+        { SkWuffsCodec_IsFormat, SkWuffsCodec_MakeFromStream },
+    #else
+        { SkGifCodec::IsGif, SkGifCodec::MakeFromStream },
+    #endif
+    #ifdef SK_HAS_PNG_LIBRARY
+        { SkIcoCodec::IsIco, SkIcoCodec::MakeFromStream },
+    #endif
+        { SkBmpCodec::IsBmp, SkBmpCodec::MakeFromStream },
+        { SkWbmpCodec::IsWbmp, SkWbmpCodec::MakeFromStream },
+    };
+    return decoders;
+}
 
-std::unique_ptr<SkCodec> SkCodec::MakeFromStream(std::unique_ptr<SkStream> stream,
-                                                 Result* outResult, SkPngChunkReader* chunkReader) {
+void SkCodec::Register(
+            bool                     (*peek)(const void*, size_t),
+            std::unique_ptr<SkCodec> (*make)(std::unique_ptr<SkStream>, SkCodec::Result*)) {
+    decoders()->push_back(DecoderProc{peek, make});
+}
+
+std::unique_ptr<SkCodec> SkCodec::MakeFromStream(
+        std::unique_ptr<SkStream> stream, Result* outResult,
+        SkPngChunkReader* chunkReader, SelectionPolicy selectionPolicy) {
     Result resultStorage;
     if (!outResult) {
         outResult = &resultStorage;
@@ -66,6 +73,12 @@ std::unique_ptr<SkCodec> SkCodec::MakeFromStream(std::unique_ptr<SkStream> strea
 
     if (!stream) {
         *outResult = kInvalidInput;
+        return nullptr;
+    }
+
+    if (selectionPolicy != SelectionPolicy::kPreferStillImage
+            && selectionPolicy != SelectionPolicy::kPreferAnimation) {
+        *outResult = kInvalidParameters;
         return nullptr;
     }
 
@@ -105,11 +118,17 @@ std::unique_ptr<SkCodec> SkCodec::MakeFromStream(std::unique_ptr<SkStream> strea
     } else
 #endif
     {
-        for (DecoderProc proc : gDecoderProcs) {
+        for (DecoderProc proc : *decoders()) {
             if (proc.IsFormat(buffer, bytesRead)) {
                 return proc.MakeFromStream(std::move(stream), outResult);
             }
         }
+
+#ifdef SK_HAS_HEIF_LIBRARY
+        if (SkHeifCodec::IsHeif(buffer, bytesRead)) {
+            return SkHeifCodec::MakeFromStream(std::move(stream), selectionPolicy, outResult);
+        }
+#endif
 
 #ifdef SK_CODEC_DECODES_RAW
         // Try to treat the input as RAW if all the other checks failed.
@@ -195,8 +214,21 @@ bool SkCodec::rewindIfNeeded() {
     return this->onRewind();
 }
 
+static SkIRect frame_rect_on_screen(SkIRect frameRect,
+                                    const SkIRect& screenRect) {
+    if (!frameRect.intersect(screenRect)) {
+        return SkIRect::MakeEmpty();
+    }
+
+    return frameRect;
+}
+
 bool zero_rect(const SkImageInfo& dstInfo, void* pixels, size_t rowBytes,
                SkISize srcDimensions, SkIRect prevRect) {
+    prevRect = frame_rect_on_screen(prevRect, SkIRect::MakeSize(srcDimensions));
+    if (prevRect.isEmpty()) {
+        return true;
+    }
     const auto dimensions = dstInfo.dimensions();
     if (dimensions != srcDimensions) {
         SkRect src = SkRect::Make(srcDimensions);
@@ -214,13 +246,7 @@ bool zero_rect(const SkImageInfo& dstInfo, void* pixels, size_t rowBytes,
         }
     }
 
-    if (!prevRect.intersect(dstInfo.bounds())) {
-        SkCodecPrintf("rectangles do not intersect!");
-        SkASSERT(false);
-        return true;
-    }
-
-    const SkImageInfo info = dstInfo.makeWH(prevRect.width(), prevRect.height());
+    const SkImageInfo info = dstInfo.makeDimensions(prevRect.size());
     const size_t bpp = dstInfo.bytesPerPixel();
     const size_t offset = prevRect.x() * bpp + prevRect.y() * rowBytes;
     void* eraseDst = SkTAddOffset<void>(pixels, offset);
@@ -713,15 +739,6 @@ const char* SkCodec::ResultToString(Result result) {
             SkASSERT(false);
             return "bogus result value";
     }
-}
-
-static SkIRect frame_rect_on_screen(SkIRect frameRect,
-                                    const SkIRect& screenRect) {
-    if (!frameRect.intersect(screenRect)) {
-        return SkIRect::MakeEmpty();
-    }
-
-    return frameRect;
 }
 
 static bool independent(const SkFrame& frame) {

@@ -8,10 +8,10 @@
 #ifndef GrMeshDrawOp_DEFINED
 #define GrMeshDrawOp_DEFINED
 
-#include "GrAppliedClip.h"
-#include "GrDrawOp.h"
-#include "GrGeometryProcessor.h"
-#include "GrMesh.h"
+#include "src/gpu/GrAppliedClip.h"
+#include "src/gpu/GrGeometryProcessor.h"
+#include "src/gpu/GrMesh.h"
+#include "src/gpu/ops/GrDrawOp.h"
 #include <type_traits>
 
 class GrAtlasManager;
@@ -36,7 +36,7 @@ protected:
     public:
         PatternHelper(Target*, GrPrimitiveType, size_t vertexStride,
                       sk_sp<const GrBuffer> indexBuffer, int verticesPerRepetition,
-                      int indicesPerRepetition, int repeatCount);
+                      int indicesPerRepetition, int repeatCount, int maxRepetitions);
 
         /** Called to issue draws to the GrMeshDrawOp::Target.*/
         void recordDraw(Target*, sk_sp<const GrGeometryProcessor>) const;
@@ -48,15 +48,13 @@ protected:
     protected:
         PatternHelper() = default;
         void init(Target*, GrPrimitiveType, size_t vertexStride, sk_sp<const GrBuffer> indexBuffer,
-                  int verticesPerRepetition, int indicesPerRepetition, int repeatCount);
+                  int verticesPerRepetition, int indicesPerRepetition, int repeatCount,
+                  int maxRepetitions);
 
     private:
         void* fVertices = nullptr;
         GrMesh* fMesh = nullptr;
     };
-
-    static const int kVerticesPerQuad = 4;
-    static const int kIndicesPerQuad = 6;
 
     /** A specialization of InstanceHelper for quad rendering. */
     class QuadHelper : private PatternHelper {
@@ -72,7 +70,14 @@ protected:
     };
 
 private:
+    void onPrePrepare(GrRecordingContext* context, const GrAppliedClip* clip) final {
+        this->onPrePrepareDraws(context, clip);
+    }
     void onPrepare(GrOpFlushState* state) final;
+
+    // Only the GrTextureOp currently overrides this virtual
+    virtual void onPrePrepareDraws(GrRecordingContext*, const GrAppliedClip*) {}
+
     virtual void onPrepareDraws(Target*) = 0;
     typedef GrDrawOp INHERITED;
 };
@@ -141,11 +146,20 @@ public:
 
     GrMesh* allocMeshes(int n) { return this->allocator()->makeArray<GrMesh>(n); }
 
-    GrPipeline::DynamicStateArrays* allocDynamicStateArrays(int numMeshes,
-                                                            int numPrimitiveProcessorTextures,
-                                                            bool allocScissors);
+    static GrPipeline::DynamicStateArrays* AllocDynamicStateArrays(SkArenaAlloc*,
+                                                                   int numMeshes,
+                                                                   int numPrimitiveProcTextures,
+                                                                   bool allocScissors);
 
-    GrPipeline::FixedDynamicState* makeFixedDynamicState(int numPrimitiveProcessorTextures);
+    static GrPipeline::FixedDynamicState* MakeFixedDynamicState(SkArenaAlloc*,
+                                                                const GrAppliedClip* clip,
+                                                                int numPrimitiveProcessorTextures);
+
+
+    GrPipeline::FixedDynamicState* makeFixedDynamicState(int numPrimitiveProcessorTextures) {
+        return MakeFixedDynamicState(this->allocator(), this->appliedClip(),
+                                     numPrimitiveProcessorTextures);
+    }
 
     virtual GrRenderTargetProxy* proxy() const = 0;
 
@@ -160,11 +174,15 @@ public:
     virtual GrStrikeCache* glyphCache() const = 0;
     virtual GrAtlasManager* atlasManager() const = 0;
 
+    // This should be called during onPrepare of a GrOp. The caller should add any proxies to the
+    // array it will use that it did not access during a call to visitProxies. This is usually the
+    // case for atlases.
+    virtual SkTArray<GrTextureProxy*, true>* sampledProxyArray() = 0;
+
     virtual const GrCaps& caps() const = 0;
 
     virtual GrDeferredUploadTarget* deferredUploadTarget() = 0;
 
-private:
     virtual SkArenaAlloc* allocator() = 0;
 };
 

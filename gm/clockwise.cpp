@@ -5,38 +5,73 @@
  * found in the LICENSE file.
  */
 
-#include "gm.h"
+#include "gm/gm.h"
+#include "include/core/SkBlendMode.h"
+#include "include/core/SkCanvas.h"
+#include "include/core/SkColorSpace.h"
+#include "include/core/SkMatrix.h"
+#include "include/core/SkPoint.h"
+#include "include/core/SkRect.h"
+#include "include/core/SkRefCnt.h"
+#include "include/core/SkSize.h"
+#include "include/core/SkString.h"
+#include "include/core/SkTypes.h"
+#include "include/gpu/GrContext.h"
+#include "include/gpu/GrTypes.h"
+#include "include/private/GrRecordingContext.h"
+#include "include/private/GrTypesPriv.h"
+#include "include/private/SkColorData.h"
+#include "src/gpu/GrBuffer.h"
+#include "src/gpu/GrCaps.h"
+#include "src/gpu/GrClip.h"
+#include "src/gpu/GrColorSpaceXform.h"
+#include "src/gpu/GrContextPriv.h"
+#include "src/gpu/GrGeometryProcessor.h"
+#include "src/gpu/GrGpuBuffer.h"
+#include "src/gpu/GrMemoryPool.h"
+#include "src/gpu/GrMesh.h"
+#include "src/gpu/GrOpFlushState.h"
+#include "src/gpu/GrOpsRenderPass.h"
+#include "src/gpu/GrPipeline.h"
+#include "src/gpu/GrPrimitiveProcessor.h"
+#include "src/gpu/GrProcessor.h"
+#include "src/gpu/GrProcessorSet.h"
+#include "src/gpu/GrProgramInfo.h"
+#include "src/gpu/GrRecordingContextPriv.h"
+#include "src/gpu/GrRenderTargetContext.h"
+#include "src/gpu/GrRenderTargetContextPriv.h"
+#include "src/gpu/GrResourceProvider.h"
+#include "src/gpu/GrSamplerState.h"
+#include "src/gpu/GrShaderCaps.h"
+#include "src/gpu/GrShaderVar.h"
+#include "src/gpu/GrSurfaceProxy.h"
+#include "src/gpu/GrTextureProxy.h"
+#include "src/gpu/glsl/GrGLSLFragmentShaderBuilder.h"
+#include "src/gpu/glsl/GrGLSLGeometryProcessor.h"
+#include "src/gpu/glsl/GrGLSLPrimitiveProcessor.h"
+#include "src/gpu/glsl/GrGLSLVarying.h"
+#include "src/gpu/ops/GrDrawOp.h"
+#include "src/gpu/ops/GrOp.h"
 
-#include "GrClip.h"
-#include "GrContext.h"
-#include "GrContextPriv.h"
-#include "GrGpuCommandBuffer.h"
-#include "GrMemoryPool.h"
-#include "GrOpFlushState.h"
-#include "GrRecordingContext.h"
-#include "GrRecordingContextPriv.h"
-#include "GrRenderTargetContext.h"
-#include "GrRenderTargetContextPriv.h"
-#include "GrRenderTarget.h"
-#include "glsl/GrGLSLFragmentShaderBuilder.h"
-#include "glsl/GrGLSLGeometryProcessor.h"
-#include "glsl/GrGLSLVarying.h"
-#include "glsl/GrGLSLVertexGeoBuilder.h"
+#include <memory>
+#include <utility>
 
-namespace skiagm {
+class GrAppliedClip;
+class GrGLSLProgramDataManager;
+
+namespace {
 
 static constexpr GrGeometryProcessor::Attribute gVertex =
-        {"vertex", kFloat2_GrVertexAttribType, kFloat2_GrSLType};
+        {"position", kFloat2_GrVertexAttribType, kFloat2_GrSLType};
 
 /**
  * This is a GPU-backend specific test. It ensures that SkSL properly identifies clockwise-winding
  * triangles (sk_Clockwise), in terms of to Skia device space, in all backends and with all render
  * target origins. We draw clockwise triangles green and counter-clockwise red.
  */
-class ClockwiseGM : public GpuGM {
-private:
-    SkString onShortName() final { return SkString("clockwise"); }
-    SkISize onISize() override { return SkISize::Make(300, 200); }
+class ClockwiseGM : public skiagm::GpuGM {
+    SkString onShortName() override { return SkString("clockwise"); }
+    SkISize onISize() override { return {300, 200}; }
     void onDraw(GrContext*, GrRenderTargetContext*, SkCanvas*) override;
 };
 
@@ -69,7 +104,7 @@ class GLSLClockwiseTestProcessor : public GrGLSLGeometryProcessor {
     void onEmitCode(EmitArgs& args, GrGPArgs* gpArgs) override {
         const ClockwiseTestProcessor& proc = args.fGP.cast<ClockwiseTestProcessor>();
         args.fVaryingHandler->emitAttributes(proc);
-        gpArgs->fPositionVar.set(kFloat2_GrSLType, "vertex");
+        gpArgs->fPositionVar.set(kFloat2_GrSLType, "position");
         args.fFragBuilder->codeAppendf(
                 "%s = sk_Clockwise ? half4(0,1,0,1) : half4(1,0,0,1);", args.fOutputColor);
         if (!proc.fReadSkFragCoord) {
@@ -103,36 +138,47 @@ public:
 private:
     ClockwiseTestOp(bool readSkFragCoord, float y)
             : GrDrawOp(ClassID()), fReadSkFragCoord(readSkFragCoord), fY(y) {
-        this->setBounds(SkRect::MakeIWH(300, 100), HasAABloat::kNo, IsZeroArea::kNo);
+        this->setBounds(SkRect::MakeXYWH(0, fY, 100, 100), HasAABloat::kNo, IsHairline::kNo);
     }
 
     const char* name() const override { return "ClockwiseTestOp"; }
     FixedFunctionFlags fixedFunctionFlags() const override { return FixedFunctionFlags::kNone; }
-    GrProcessorSet::Analysis finalize(
-            const GrCaps&, const GrAppliedClip*, GrFSAAType, GrClampType) override {
+    GrProcessorSet::Analysis finalize(const GrCaps&, const GrAppliedClip*,
+                                      bool hasMixedSampledCoverage, GrClampType) override {
         return GrProcessorSet::EmptySetAnalysis();
     }
-    void onPrepare(GrOpFlushState*) override {}
-    void onExecute(GrOpFlushState* flushState, const SkRect& chainBounds) override {
+    void onPrepare(GrOpFlushState* flushState) override {
         SkPoint vertices[4] = {
             {100, fY},
             {0, fY+100},
             {0, fY},
             {100, fY+100},
         };
-        sk_sp<const GrBuffer> vertexBuffer(flushState->resourceProvider()->createBuffer(
-                sizeof(vertices), GrGpuBufferType::kVertex, kStatic_GrAccessPattern, vertices));
-        if (!vertexBuffer) {
+        fVertexBuffer = flushState->resourceProvider()->createBuffer(
+                sizeof(vertices), GrGpuBufferType::kVertex, kStatic_GrAccessPattern, vertices);
+    }
+    void onExecute(GrOpFlushState* flushState, const SkRect& chainBounds) override {
+        if (!fVertexBuffer) {
             return;
         }
-        GrPipeline pipeline(GrScissorTest::kDisabled, SkBlendMode::kPlus);
+        GrPipeline pipeline(GrScissorTest::kDisabled, SkBlendMode::kPlus,
+                            flushState->drawOpArgs().outputSwizzle());
         GrMesh mesh(GrPrimitiveType::kTriangleStrip);
         mesh.setNonIndexedNonInstanced(4);
-        mesh.setVertexData(std::move(vertexBuffer));
-        flushState->rtCommandBuffer()->draw(ClockwiseTestProcessor(fReadSkFragCoord), pipeline,
-                                            nullptr, nullptr, &mesh, 1, SkRect::MakeIWH(100, 100));
+        mesh.setVertexData(std::move(fVertexBuffer));
+
+        ClockwiseTestProcessor primProc(fReadSkFragCoord);
+
+        GrProgramInfo programInfo(flushState->drawOpArgs().numSamples(),
+                                  flushState->drawOpArgs().origin(),
+                                  pipeline,
+                                  primProc,
+                                  nullptr, nullptr, 0);
+
+        flushState->opsRenderPass()->draw(programInfo, &mesh, 1, SkRect::MakeXYWH(0, fY, 100, 100));
     }
 
+    sk_sp<GrBuffer> fVertexBuffer;
     const bool fReadSkFragCoord;
     const float fY;
 
@@ -150,15 +196,15 @@ void ClockwiseGM::onDraw(GrContext* ctx, GrRenderTargetContext* rtc, SkCanvas* c
     rtc->priv().testingOnly_addDrawOp(ClockwiseTestOp::Make(ctx, true, 100));
 
     // Draw the test to an off-screen, top-down render target.
+    GrColorType rtcColorType = rtc->colorInfo().colorType();
     if (auto topLeftRTC = ctx->priv().makeDeferredRenderTargetContext(
-            rtc->asSurfaceProxy()->backendFormat(), SkBackingFit::kExact, 100, 200,
-            rtc->asSurfaceProxy()->config(), nullptr, 1, GrMipMapped::kNo,
-            kTopLeft_GrSurfaceOrigin, nullptr, SkBudgeted::kYes)) {
+                SkBackingFit::kExact, 100, 200, rtcColorType, nullptr, 1,
+                GrMipMapped::kNo, kTopLeft_GrSurfaceOrigin, nullptr, SkBudgeted::kYes)) {
         topLeftRTC->clear(nullptr, SK_PMColor4fTRANSPARENT,
                           GrRenderTargetContext::CanClearFullscreen::kYes);
         topLeftRTC->priv().testingOnly_addDrawOp(ClockwiseTestOp::Make(ctx, false, 0));
         topLeftRTC->priv().testingOnly_addDrawOp(ClockwiseTestOp::Make(ctx, true, 100));
-        rtc->drawTexture(GrNoClip(), sk_ref_sp(topLeftRTC->asTextureProxy()),
+        rtc->drawTexture(GrNoClip(), sk_ref_sp(topLeftRTC->asTextureProxy()), rtcColorType,
                          GrSamplerState::Filter::kNearest, SkBlendMode::kSrcOver,
                          SK_PMColor4fWHITE, {0, 0, 100, 200},
                          {100, 0, 200, 200}, GrAA::kNo, GrQuadAAFlags::kNone,
@@ -168,14 +214,13 @@ void ClockwiseGM::onDraw(GrContext* ctx, GrRenderTargetContext* rtc, SkCanvas* c
 
     // Draw the test to an off-screen, bottom-up render target.
     if (auto topLeftRTC = ctx->priv().makeDeferredRenderTargetContext(
-            rtc->asSurfaceProxy()->backendFormat(), SkBackingFit::kExact, 100, 200,
-            rtc->asSurfaceProxy()->config(), nullptr, 1, GrMipMapped::kNo,
-            kBottomLeft_GrSurfaceOrigin, nullptr, SkBudgeted::kYes)) {
+                SkBackingFit::kExact, 100, 200, rtcColorType, nullptr, 1,
+                GrMipMapped::kNo, kBottomLeft_GrSurfaceOrigin, nullptr, SkBudgeted::kYes)) {
         topLeftRTC->clear(nullptr, SK_PMColor4fTRANSPARENT,
                           GrRenderTargetContext::CanClearFullscreen::kYes);
         topLeftRTC->priv().testingOnly_addDrawOp(ClockwiseTestOp::Make(ctx, false, 0));
         topLeftRTC->priv().testingOnly_addDrawOp(ClockwiseTestOp::Make(ctx, true, 100));
-        rtc->drawTexture(GrNoClip(), sk_ref_sp(topLeftRTC->asTextureProxy()),
+        rtc->drawTexture(GrNoClip(), sk_ref_sp(topLeftRTC->asTextureProxy()), rtcColorType,
                          GrSamplerState::Filter::kNearest, SkBlendMode::kSrcOver,
                          SK_PMColor4fWHITE, {0, 0, 100, 200},
                          {200, 0, 300, 200}, GrAA::kNo, GrQuadAAFlags::kNone,

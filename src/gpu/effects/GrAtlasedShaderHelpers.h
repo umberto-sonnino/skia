@@ -8,18 +8,18 @@
 #ifndef GrAtlasedShaderHelpers_DEFINED
 #define GrAtlasedShaderHelpers_DEFINED
 
-#include "GrShaderCaps.h"
-#include "glsl/GrGLSLPrimitiveProcessor.h"
-#include "glsl/GrGLSLFragmentShaderBuilder.h"
-#include "glsl/GrGLSLVarying.h"
-#include "glsl/GrGLSLVertexGeoBuilder.h"
+#include "src/gpu/GrShaderCaps.h"
+#include "src/gpu/glsl/GrGLSLFragmentShaderBuilder.h"
+#include "src/gpu/glsl/GrGLSLPrimitiveProcessor.h"
+#include "src/gpu/glsl/GrGLSLVarying.h"
+#include "src/gpu/glsl/GrGLSLVertexGeoBuilder.h"
 
 static void append_index_uv_varyings(GrGLSLPrimitiveProcessor::EmitArgs& args,
                                      const char* inTexCoordsName,
-                                     const char* atlasSizeInvName,
-                                     GrGLSLVarying *uv,
-                                     GrGLSLVarying *texIdx,
-                                     GrGLSLVarying *st) {
+                                     const char* atlasDimensionsInvName,
+                                     GrGLSLVarying* uv,
+                                     GrGLSLVarying* texIdx,
+                                     GrGLSLVarying* st) {
     using Interpolation = GrGLSLVaryingHandler::Interpolation;
 
     // This extracts the texture index and texel coordinates from the same variable
@@ -38,9 +38,10 @@ static void append_index_uv_varyings(GrGLSLPrimitiveProcessor::EmitArgs& args,
         args.fVertBuilder->codeAppend("float texIdx = 2.0*diff.x + diff.y;");
     }
 
-    // Multiply by 1/atlasSize to get normalized texture coordinates
+    // Multiply by 1/atlasDimensions to get normalized texture coordinates
     args.fVaryingHandler->addVarying("TextureCoords", uv);
-    args.fVertBuilder->codeAppendf("%s = unormTexCoords * %s;", uv->vsOut(), atlasSizeInvName);
+    args.fVertBuilder->codeAppendf("%s = unormTexCoords * %s;", uv->vsOut(),
+                                   atlasDimensionsInvName);
 
     args.fVaryingHandler->addVarying("TexIndex", texIdx, args.fShaderCaps->integerSupport()
                                                                  ? Interpolation::kMustBeFlat

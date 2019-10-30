@@ -5,39 +5,39 @@
  * found in the LICENSE file.
  */
 
-#include "ChromeTracingTracer.h"
-#include "CommonFlags.h"
-#include "CommonFlagsConfig.h"
-#include "DMJsonWriter.h"
-#include "DMSrcSink.h"
-#include "EventTracingPriv.h"
-#include "HashAndEncode.h"
-#include "ProcStats.h"
-#include "Resources.h"
-#include "SkBBHFactory.h"
-#include "SkChecksum.h"
-#include "SkCodec.h"
-#include "SkColorPriv.h"
-#include "SkColorSpace.h"
-#include "SkColorSpacePriv.h"
-#include "SkData.h"
-#include "SkDebugfTracer.h"
-#include "SkDocument.h"
-#include "SkFontMgr.h"
-#include "SkGraphics.h"
-#include "SkHalf.h"
-#include "SkLeanWindows.h"
-#include "SkMD5.h"
-#include "SkMutex.h"
-#include "SkOSFile.h"
-#include "SkOSPath.h"
-#include "SkSpinlock.h"
-#include "SkTHash.h"
-#include "SkTaskGroup.h"
-#include "SkTypeface_win.h"
-#include "Test.h"
-#include "ToolUtils.h"
-#include "ios_utils.h"
+#include "dm/DMJsonWriter.h"
+#include "dm/DMSrcSink.h"
+#include "include/codec/SkCodec.h"
+#include "include/core/SkBBHFactory.h"
+#include "include/core/SkColorPriv.h"
+#include "include/core/SkColorSpace.h"
+#include "include/core/SkData.h"
+#include "include/core/SkDocument.h"
+#include "include/core/SkFontMgr.h"
+#include "include/core/SkGraphics.h"
+#include "include/ports/SkTypeface_win.h"
+#include "include/private/SkChecksum.h"
+#include "include/private/SkHalf.h"
+#include "include/private/SkSpinlock.h"
+#include "include/private/SkTHash.h"
+#include "src/core/SkColorSpacePriv.h"
+#include "src/core/SkLeanWindows.h"
+#include "src/core/SkMD5.h"
+#include "src/core/SkOSFile.h"
+#include "src/core/SkTaskGroup.h"
+#include "src/utils/SkOSPath.h"
+#include "tests/Test.h"
+#include "tools/AutoreleasePool.h"
+#include "tools/HashAndEncode.h"
+#include "tools/ProcStats.h"
+#include "tools/Resources.h"
+#include "tools/ToolUtils.h"
+#include "tools/flags/CommonFlags.h"
+#include "tools/flags/CommonFlagsConfig.h"
+#include "tools/ios_utils.h"
+#include "tools/trace/ChromeTracingTracer.h"
+#include "tools/trace/EventTracingPriv.h"
+#include "tools/trace/SkDebugfTracer.h"
 
 #include <vector>
 
@@ -61,7 +61,6 @@ static DEFINE_bool2(pathOpsExtended, x, false, "Run extended pathOps tests.");
 static DEFINE_string(matrix, "1 0 0 1",
                     "2x2 scale+skew matrix to apply or upright when using "
                     "'matrix' or 'upright' in config.");
-static DEFINE_bool(gpu_threading, false, "Allow GPU work to run on multiple threads?");
 
 static DEFINE_string(blacklist, "",
         "Space-separated config/src/srcOptions/name quadruples to blacklist. "
@@ -145,6 +144,21 @@ static DEFINE_string(properties, "",
                      "Space-separated key/value pairs to add to JSON identifying this run.");
 
 
+#if defined(__MSVC_RUNTIME_CHECKS)
+#include <rtcapi.h>
+int RuntimeCheckErrorFunc(int errorType, const char* filename, int linenumber,
+                          const char* moduleName, const char* fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(stderr, fmt, args);
+    va_end(args);
+
+    SkDebugf("Line #%d\nFile: %s\nModule: %s\n",
+             linenumber, filename ? filename : "Unknown", moduleName ? moduleName : "Unknwon");
+    return 1;
+}
+#endif
+
 using namespace DM;
 using sk_gpu_test::GrContextFactory;
 using sk_gpu_test::GLTestContext;
@@ -152,11 +166,8 @@ using sk_gpu_test::ContextInfo;
 
 /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
-static constexpr skcms_TransferFunction k2020_TF =
-    {2.22222f, 0.909672f, 0.0903276f, 0.222222f, 0.0812429f, 0, 0};
-
 static sk_sp<SkColorSpace> rec2020() {
-    return SkColorSpace::MakeRGB(k2020_TF, SkNamedGamut::kRec2020);
+    return SkColorSpace::MakeRGB(SkNamedTransferFn::kRec2020, SkNamedGamut::kRec2020);
 }
 
 /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
@@ -184,11 +195,11 @@ static void info(const char* fmt) {
     }
 }
 
-SK_DECLARE_STATIC_MUTEX(gFailuresMutex);
 static SkTArray<SkString> gFailures;
 
 static void fail(const SkString& err) {
-    SkAutoMutexAcquire lock(gFailuresMutex);
+    static SkSpinlock mutex;
+    SkAutoSpinlock lock(mutex);
     SkDebugf("\n\nFAILURE: %s\n\n", err.c_str());
     gFailures.push_back(err);
 }
@@ -218,7 +229,7 @@ static void done(const char* config, const char* src, const char* srcOptions, co
     vlog("done  %s\n", id.c_str());
     int pending;
     {
-        SkAutoMutexAcquire lock(gMutex);
+        SkAutoSpinlock lock(gMutex);
         for (int i = 0; i < gRunning.count(); i++) {
             if (gRunning[i].id == id) {
                 gRunning.removeShuffle(i);
@@ -236,7 +247,7 @@ static void done(const char* config, const char* src, const char* srcOptions, co
         int curr = sk_tools::getCurrResidentSetSizeMB(),
             peak = sk_tools::getMaxResidentSetSizeMB();
 
-        SkAutoMutexAcquire lock(gMutex);
+        SkAutoSpinlock lock(gMutex);
         info("\n%dMB RAM, %dMB peak, %d queued, %d active:\n",
              curr, peak, gPending - gRunning.count(), gRunning.count());
         for (auto& task : gRunning) {
@@ -248,7 +259,7 @@ static void done(const char* config, const char* src, const char* srcOptions, co
 static void start(const char* config, const char* src, const char* srcOptions, const char* name) {
     SkString id = SkStringPrintf("%s %s %s %s", config, src, srcOptions, name);
     vlog("start %s\n", id.c_str());
-    SkAutoMutexAcquire lock(gMutex);
+    SkAutoSpinlock lock(gMutex);
     gRunning.push_back({id,SkGetThreadID()});
 }
 
@@ -278,7 +289,7 @@ static void find_culprit() {
         #undef _
         };
 
-        SkAutoMutexAcquire lock(gMutex);
+        SkAutoSpinlock lock(gMutex);
 
         const DWORD code = e->ExceptionRecord->ExceptionCode;
         info("\nCaught exception %u", code);
@@ -317,7 +328,7 @@ static void find_culprit() {
     static void (*previous_handler[max_of(SIGABRT,SIGBUS,SIGFPE,SIGILL,SIGSEGV,SIGTERM)+1])(int);
 
     static void crash_handler(int sig) {
-        SkAutoMutexAcquire lock(gMutex);
+        SkAutoSpinlock lock(gMutex);
 
         info("\nCaught signal %d [%s] (%dMB RAM, peak %dMB), was running:\n",
              sig, strsignal(sig),
@@ -909,34 +920,21 @@ static sk_sp<SkColorSpace> rgb_to_gbr() {
 static Sink* create_sink(const GrContextOptions& grCtxOptions, const SkCommandLineConfig* config) {
     if (FLAGS_gpu) {
         if (const SkCommandLineConfigGpu* gpuConfig = config->asConfigGpu()) {
-            GrContextFactory::ContextType contextType = gpuConfig->getContextType();
-            GrContextFactory::ContextOverrides contextOverrides = gpuConfig->getContextOverrides();
             GrContextFactory testFactory(grCtxOptions);
-            if (!testFactory.get(contextType, contextOverrides)) {
+            if (!testFactory.get(gpuConfig->getContextType(), gpuConfig->getContextOverrides())) {
                 info("WARNING: can not create GPU context for config '%s'. "
                      "GM tests will be skipped.\n", gpuConfig->getTag().c_str());
                 return nullptr;
             }
             if (gpuConfig->getTestThreading()) {
                 SkASSERT(!gpuConfig->getTestPersistentCache());
-                return new GPUThreadTestingSink(
-                        contextType, contextOverrides, gpuConfig->getSurfType(),
-                        gpuConfig->getSamples(), gpuConfig->getUseDIText(),
-                        gpuConfig->getColorType(), gpuConfig->getAlphaType(),
-                        sk_ref_sp(gpuConfig->getColorSpace()), FLAGS_gpu_threading, grCtxOptions);
+                return new GPUThreadTestingSink(gpuConfig, grCtxOptions);
             } else if (gpuConfig->getTestPersistentCache()) {
-                return new GPUPersistentCacheTestingSink(
-                        contextType, contextOverrides, gpuConfig->getSurfType(),
-                        gpuConfig->getSamples(), gpuConfig->getUseDIText(),
-                        gpuConfig->getColorType(), gpuConfig->getAlphaType(),
-                        sk_ref_sp(gpuConfig->getColorSpace()), FLAGS_gpu_threading, grCtxOptions,
-                        gpuConfig->getTestPersistentCache());
+                return new GPUPersistentCacheTestingSink(gpuConfig, grCtxOptions);
+            } else if (gpuConfig->getTestPrecompile()) {
+                return new GPUPrecompileTestingSink(gpuConfig, grCtxOptions);
             } else {
-                return new GPUSink(contextType, contextOverrides, gpuConfig->getSurfType(),
-                                   gpuConfig->getSamples(), gpuConfig->getUseDIText(),
-                                   gpuConfig->getColorType(), gpuConfig->getAlphaType(),
-                                   sk_ref_sp(gpuConfig->getColorSpace()), FLAGS_gpu_threading,
-                                   grCtxOptions);
+                return new GPUSink(gpuConfig, grCtxOptions);
             }
         }
     }
@@ -995,7 +993,6 @@ static Sink* create_sink(const GrContextOptions& grCtxOptions, const SkCommandLi
 
 static Sink* create_via(const SkString& tag, Sink* wrapped) {
 #define VIA(t, via, ...) if (tag.equals(t)) return new via(__VA_ARGS__)
-    VIA("lite",      ViaLite,              wrapped);
 #ifdef TEST_VIA_SVG
     VIA("svg",       ViaSVG,               wrapped);
 #endif
@@ -1025,6 +1022,7 @@ static Sink* create_via(const SkString& tag, Sink* wrapped) {
 static bool gather_sinks(const GrContextOptions& grCtxOptions, bool defaultConfigs) {
     SkCommandLineConfigArray configs;
     ParseConfigs(FLAGS_config, &configs);
+    AutoreleasePool pool;
     for (int i = 0; i < configs.count(); i++) {
         const SkCommandLineConfig& config = *configs[i];
         Sink* sink = create_sink(grCtxOptions, &config);
@@ -1098,6 +1096,7 @@ struct Task {
     const TaggedSink& sink;
 
     static void Run(const Task& task) {
+        AutoreleasePool pool;
         SkString name = task.src->name();
 
         SkString log;
@@ -1227,25 +1226,40 @@ struct Task {
             return SkString("untagged");
         }
 
-        skcms_TransferFunction tf;
-        if (cs->isNumericalTransferFn(&tf)) {
-            auto eq = [](skcms_TransferFunction x, skcms_TransferFunction y) {
-                return x.g == y.g
-                    && x.a == y.a
-                    && x.b == y.b
-                    && x.c == y.c
-                    && x.d == y.d
-                    && x.e == y.e
-                    && x.f == y.f;
-            };
+        auto eq = [](skcms_TransferFunction x, skcms_TransferFunction y) {
+            return x.g == y.g
+                && x.a == y.a
+                && x.b == y.b
+                && x.c == y.c
+                && x.d == y.d
+                && x.e == y.e
+                && x.f == y.f;
+        };
 
-            if (tf.a == 1 && tf.b == 0 && tf.c == 0 && tf.d == 0 && tf.e == 0 && tf.f == 0) {
-                return SkStringPrintf("gamma %.3g", tf.g);
-            }
-            if (eq(tf, SkNamedTransferFn::kSRGB)) { return SkString("sRGB"); }
-            if (eq(tf, k2020_TF                )) { return SkString("2020"); }
-            return SkStringPrintf("%.3g %.3g %.3g %.3g %.3g %.3g %.3g",
-                                  tf.g, tf.a, tf.b, tf.c, tf.d, tf.e, tf.f);
+        skcms_TransferFunction tf;
+        cs->transferFn(&tf.g);
+        switch (classify_transfer_fn(tf)) {
+            case sRGBish_TF:
+                if (tf.a == 1 && tf.b == 0 && tf.c == 0 && tf.d == 0 && tf.e == 0 && tf.f == 0) {
+                    return SkStringPrintf("gamma %.3g", tf.g);
+                }
+                if (eq(tf, SkNamedTransferFn::kSRGB)) { return SkString("sRGB"); }
+                if (eq(tf, SkNamedTransferFn::kRec2020)) { return SkString("2020"); }
+                return SkStringPrintf("%.3g %.3g %.3g %.3g %.3g %.3g %.3g",
+                                        tf.g, tf.a, tf.b, tf.c, tf.d, tf.e, tf.f);
+
+            case PQish_TF:
+                if (eq(tf, SkNamedTransferFn::kPQ)) { return SkString("PQ"); }
+                return SkStringPrintf("PQish %.3g %.3g %.3g %.3g %.3g %.3g",
+                                      tf.a, tf.b, tf.c, tf.d, tf.e, tf.f);
+
+            case HLGish_TF:
+                if (eq(tf, SkNamedTransferFn::kHLG)) { return SkString("HLG"); }
+                return SkStringPrintf("HLGish %.3g %.3g %.3g %.3g %.3g",
+                                      tf.a, tf.b, tf.c, tf.d, tf.e);
+
+            case HLGinvish_TF: break;
+            case Bad_TF: break;
         }
         return SkString("non-numeric");
     }
@@ -1349,7 +1363,7 @@ static void gather_tests() {
             continue;
         }
         if (test.needsGpu && FLAGS_gpu) {
-            (FLAGS_gpu_threading ? gParallelTests : gSerialTests).push_back(test);
+            gSerialTests.push_back(test);
         } else if (!test.needsGpu && FLAGS_cpu) {
             gParallelTests.push_back(test);
         }
@@ -1368,6 +1382,7 @@ static void run_test(skiatest::Test test, const GrContextOptions& grCtxOptions) 
     } reporter;
 
     if (!FLAGS_dryRun && !is_blacklisted("_", "tests", "_", test.name)) {
+        AutoreleasePool pool;
         GrContextOptions options = grCtxOptions;
         test.modifyGrContextOptions(&options);
 
@@ -1381,6 +1396,9 @@ static void run_test(skiatest::Test test, const GrContextOptions& grCtxOptions) 
 /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
 int main(int argc, char** argv) {
+#if defined(__MSVC_RUNTIME_CHECKS)
+    _RTC_SetErrorFunc(RuntimeCheckErrorFunc);
+#endif
 #if defined(SK_BUILD_FOR_ANDROID_FRAMEWORK) && defined(SK_HAS_HEIF_LIBRARY)
     android::ProcessState::self()->startThreadPool();
 #endif
@@ -1453,7 +1471,7 @@ int main(int argc, char** argv) {
         if (src->veto(sink->flags()) ||
             is_blacklisted(sink.tag.c_str(), src.tag.c_str(),
                            src.options.c_str(), src->name().c_str())) {
-            SkAutoMutexAcquire lock(gMutex);
+            SkAutoSpinlock lock(gMutex);
             gPending--;
             continue;
         }

@@ -7,47 +7,50 @@
 
 #include <ctype.h>
 
-#include "nanobench.h"
+#include "bench/nanobench.h"
 
-#include "AndroidCodecBench.h"
-#include "Benchmark.h"
-#include "BitmapRegionDecoderBench.h"
-#include "CodecBench.h"
-#include "CodecBenchPriv.h"
-#include "CommonFlags.h"
-#include "CommonFlagsConfig.h"
-#include "CrashHandler.h"
-#include "EventTracingPriv.h"
-#include "GMBench.h"
-#include "ProcStats.h"
-#include "RecordingBench.h"
-#include "ResultsWriter.h"
-#include "SKPAnimationBench.h"
-#include "SKPBench.h"
-#include "SkAndroidCodec.h"
-#include "SkAutoMalloc.h"
-#include "SkBBoxHierarchy.h"
-#include "SkBitmapRegionDecoder.h"
-#include "SkCanvas.h"
-#include "SkCodec.h"
-#include "SkColorSpacePriv.h"
-#include "SkData.h"
-#include "SkDebugfTracer.h"
-#include "SkGraphics.h"
-#include "SkJSONWriter.h"
-#include "SkLeanWindows.h"
-#include "SkOSFile.h"
-#include "SkOSPath.h"
-#include "SkPictureRecorder.h"
-#include "SkString.h"
-#include "SkSurface.h"
-#include "SkTaskGroup.h"
-#include "SkTraceEvent.h"
-#include "Stats.h"
-#include "ios_utils.h"
+#include "bench/AndroidCodecBench.h"
+#include "bench/Benchmark.h"
+#include "bench/BitmapRegionDecoderBench.h"
+#include "bench/CodecBench.h"
+#include "bench/CodecBenchPriv.h"
+#include "bench/GMBench.h"
+#include "bench/RecordingBench.h"
+#include "bench/ResultsWriter.h"
+#include "bench/SKPAnimationBench.h"
+#include "bench/SKPBench.h"
+#include "bench/SkGlyphCacheBench.h"
+#include "include/android/SkBitmapRegionDecoder.h"
+#include "include/codec/SkAndroidCodec.h"
+#include "include/codec/SkCodec.h"
+#include "include/core/SkCanvas.h"
+#include "include/core/SkData.h"
+#include "include/core/SkGraphics.h"
+#include "include/core/SkPictureRecorder.h"
+#include "include/core/SkString.h"
+#include "include/core/SkSurface.h"
+#include "include/core/SkTime.h"
+#include "src/core/SkAutoMalloc.h"
+#include "src/core/SkBBoxHierarchy.h"
+#include "src/core/SkColorSpacePriv.h"
+#include "src/core/SkLeanWindows.h"
+#include "src/core/SkOSFile.h"
+#include "src/core/SkTaskGroup.h"
+#include "src/core/SkTraceEvent.h"
+#include "src/utils/SkJSONWriter.h"
+#include "src/utils/SkOSPath.h"
+#include "tools/AutoreleasePool.h"
+#include "tools/CrashHandler.h"
+#include "tools/ProcStats.h"
+#include "tools/Stats.h"
+#include "tools/flags/CommonFlags.h"
+#include "tools/flags/CommonFlagsConfig.h"
+#include "tools/ios_utils.h"
+#include "tools/trace/EventTracingPriv.h"
+#include "tools/trace/SkDebugfTracer.h"
 
 #ifdef SK_XML
-#include "SkSVGDOM.h"
+#include "experimental/svg/model/SkSVGDOM.h"
 #endif  // SK_XML
 
 #include <stdlib.h>
@@ -60,13 +63,13 @@ extern bool gSkForceRasterPipelineBlitter;
 
 #endif
 
-#include "GrCaps.h"
-#include "GrContextFactory.h"
-#include "GrContextPriv.h"
-#include "SkGr.h"
-#include "gl/GrGLDefines.h"
-#include "gl/GrGLGpu.h"
-#include "gl/GrGLUtil.h"
+#include "src/gpu/GrCaps.h"
+#include "src/gpu/GrContextPriv.h"
+#include "src/gpu/SkGr.h"
+#include "src/gpu/gl/GrGLDefines.h"
+#include "src/gpu/gl/GrGLGpu.h"
+#include "src/gpu/gl/GrGLUtil.h"
+#include "tools/gpu/GrContextFactory.h"
 
 using sk_gpu_test::ContextInfo;
 using sk_gpu_test::GrContextFactory;
@@ -75,17 +78,6 @@ using sk_gpu_test::TestContext;
 GrContextOptions grContextOpts;
 
 static const int kAutoTuneLoops = 0;
-
-#if !defined(__has_feature)
-    #define  __has_feature(x) 0
-#endif
-
-static const int kDefaultLoops =
-#if defined(SK_DEBUG) || __has_feature(address_sanitizer)
-    1;
-#else
-    kAutoTuneLoops;
-#endif
 
 static SkString loops_help_txt() {
     SkString help;
@@ -101,7 +93,7 @@ static SkString to_string(int n) {
     return str;
 }
 
-static DEFINE_int(loops, kDefaultLoops, loops_help_txt().c_str());
+static DEFINE_int(loops, kAutoTuneLoops, loops_help_txt().c_str());
 
 static DEFINE_int(samples, 10, "Number of samples to measure for each bench.");
 static DEFINE_int(ms, 0, "If >0, run each bench for this many ms instead of obeying --samples.");
@@ -122,7 +114,6 @@ static DEFINE_string(zoom, "1.0,0",
                      "Comma-separated zoomMax,zoomPeriodMs factors for a periodic SKP zoom "
                      "function that ping-pongs between 1.0 and zoomMax.");
 static DEFINE_bool(bbh, true, "Build a BBH for SKPs?");
-static DEFINE_bool(lite, false, "Use SkLiteRecorder in recording benchmarks?");
 static DEFINE_bool(mpd, true, "Use MultiPictureDraw for the SKPs?");
 static DEFINE_bool(loopSKP, true, "Loop SKPs like we do for micro benches?");
 static DEFINE_int(flushEvery, 10, "Flush --outResultsFile every Nth run.");
@@ -167,6 +158,7 @@ static DEFINE_bool2(verbose, v, false, "enable verbose output from the test driv
 
 static DEFINE_string(skps, "skps", "Directory to read skps from.");
 static DEFINE_string(svgs, "", "Directory to read SVGs from, or a single SVG file.");
+static DEFINE_string(texttraces, "", "Directory to read TextBlobTrace files from.");
 
 static DEFINE_int_2(threads, j, -1,
                "Run threadsafe tests on a threadpool with this many extra threads, "
@@ -469,9 +461,9 @@ static void create_config(const SkCommandLineConfig* config, SkTArray<Config>* c
 
         GrContextFactory factory(grContextOpts);
         if (const GrContext* ctx = factory.get(ctxType, ctxOverrides)) {
-            GrPixelConfig grPixConfig = SkColorType2GrPixelConfig(colorType);
+            GrBackendFormat format = ctx->defaultBackendFormat(colorType, GrRenderable::kYes);
             int supportedSampleCount =
-                    ctx->priv().caps()->getRenderTargetSampleCount(sampleCount, grPixConfig);
+                    ctx->priv().caps()->getRenderTargetSampleCount(sampleCount, format);
             if (sampleCount != supportedSampleCount) {
                 SkDebugf("Configuration '%s' sample count %d is not a supported sample count.\n",
                          config->getTag().c_str(), sampleCount);
@@ -636,23 +628,10 @@ static void collect_files(const CommandLineFlags::StringArray& paths,
 class BenchmarkStream {
 public:
     BenchmarkStream() : fBenches(BenchRegistry::Head())
-                      , fGMs(skiagm::GMRegistry::Head())
-                      , fCurrentRecording(0)
-                      , fCurrentDeserialPicture(0)
-                      , fCurrentScale(0)
-                      , fCurrentSKP(0)
-                      , fCurrentSVG(0)
-                      , fCurrentUseMPD(0)
-                      , fCurrentCodec(0)
-                      , fCurrentAndroidCodec(0)
-                      , fCurrentBRDImage(0)
-                      , fCurrentColorType(0)
-                      , fCurrentAlphaType(0)
-                      , fCurrentSubsetType(0)
-                      , fCurrentSampleSize(0)
-                      , fCurrentAnimSKP(0) {
+                      , fGMs(skiagm::GMRegistry::Head()) {
         collect_files(FLAGS_skps, ".skp", &fSKPs);
         collect_files(FLAGS_svgs, ".svg", &fSVGs);
+        collect_files(FLAGS_texttraces, ".trace", &fTextBlobTraces);
 
         if (4 != sscanf(FLAGS_clip[0], "%d,%d,%d,%d",
                         &fClip.fLeft, &fClip.fTop, &fClip.fRight, &fClip.fBottom)) {
@@ -759,13 +738,27 @@ public:
         }
 
         while (fGMs) {
-            std::unique_ptr<skiagm::GM> gm(fGMs->get()(nullptr));
+            std::unique_ptr<skiagm::GM> gm = fGMs->get()();
             fGMs = fGMs->next();
             if (gm->runAsBench()) {
                 fSourceType = "gm";
                 fBenchType  = "micro";
-                return new GMBench(gm.release());
+                return new GMBench(std::move(gm));
             }
+        }
+
+        while (fCurrentTextBlobTrace < fTextBlobTraces.count()) {
+            SkString path = fTextBlobTraces[fCurrentTextBlobTrace++];
+            SkString basename = SkOSPath::Basename(path.c_str());
+            static constexpr char kEnding[] = ".trace";
+            if (basename.endsWith(kEnding)) {
+                basename.remove(basename.size() - strlen(kEnding), strlen(kEnding));
+            }
+            fSourceType = "texttrace";
+            fBenchType  = "micro";
+            return CreateDiffCanvasBench(
+                    SkStringPrintf("SkDiffBench-%s", basename.c_str()),
+                    [path](){ return SkStream::MakeFromFile(path.c_str()); });
         }
 
         // First add all .skps as RecordingBenches.
@@ -780,7 +773,7 @@ public:
             fBenchType  = "recording";
             fSKPBytes = static_cast<double>(pic->approximateBytesUsed());
             fSKPOps   = pic->approximateOpCount();
-            return new RecordingBench(name.c_str(), pic.get(), FLAGS_bbh, FLAGS_lite);
+            return new RecordingBench(name.c_str(), pic.get(), FLAGS_bbh);
         }
 
         // Add all .skps as DeserializePictureBenchs.
@@ -856,9 +849,9 @@ public:
 
                 fCurrentAnimSKP++;
                 SkString name = SkOSPath::Basename(path.c_str());
-                sk_sp<SKPAnimationBench::Animation> animation(
-                    SKPAnimationBench::CreateZoomAnimation(fZoomMax, fZoomPeriodMs));
-                return new SKPAnimationBench(name.c_str(), pic.get(), fClip, animation.get(),
+                sk_sp<SKPAnimationBench::Animation> animation =
+                    SKPAnimationBench::MakeZoomAnimation(fZoomMax, fZoomPeriodMs);
+                return new SKPAnimationBench(name.c_str(), pic.get(), fClip, std::move(animation),
                                              FLAGS_loopSKP);
             }
         }
@@ -1101,6 +1094,7 @@ private:
     SkTArray<SkScalar> fScales;
     SkTArray<SkString> fSKPs;
     SkTArray<SkString> fSVGs;
+    SkTArray<SkString> fTextBlobTraces;
     SkTArray<bool>     fUseMPDs;
     SkTArray<SkString> fImages;
     SkTArray<SkColorType, true> fColorTypes;
@@ -1111,20 +1105,21 @@ private:
 
     const char* fSourceType;  // What we're benching: bench, GM, SKP, ...
     const char* fBenchType;   // How we bench it: micro, recording, playback, ...
-    int fCurrentRecording;
-    int fCurrentDeserialPicture;
-    int fCurrentScale;
-    int fCurrentSKP;
-    int fCurrentSVG;
-    int fCurrentUseMPD;
-    int fCurrentCodec;
-    int fCurrentAndroidCodec;
-    int fCurrentBRDImage;
-    int fCurrentColorType;
-    int fCurrentAlphaType;
-    int fCurrentSubsetType;
-    int fCurrentSampleSize;
-    int fCurrentAnimSKP;
+    int fCurrentRecording = 0;
+    int fCurrentDeserialPicture = 0;
+    int fCurrentScale = 0;
+    int fCurrentSKP = 0;
+    int fCurrentSVG = 0;
+    int fCurrentTextBlobTrace = 0;
+    int fCurrentUseMPD = 0;
+    int fCurrentCodec = 0;
+    int fCurrentAndroidCodec = 0;
+    int fCurrentBRDImage = 0;
+    int fCurrentColorType = 0;
+    int fCurrentAlphaType = 0;
+    int fCurrentSubsetType = 0;
+    int fCurrentSampleSize = 0;
+    int fCurrentAnimSKP = 0;
 };
 
 // Some runs (mostly, Valgrind) are so slow that the bot framework thinks we've hung.
@@ -1174,7 +1169,9 @@ int main(int argc, char** argv) {
     std::unique_ptr<SkWStream> logStream(new SkNullWStream);
     if (!FLAGS_outResultsFile.isEmpty()) {
 #if defined(SK_RELEASE)
-        logStream.reset(new SkFILEWStream(FLAGS_outResultsFile[0]));
+        // SkJSONWriter uses a 32k in-memory cache, so it only flushes occasionally and is well
+        // equipped for a stream that re-opens, appends, and closes the file on every write.
+        logStream.reset(new NanoFILEAppendAndCloseStream(FLAGS_outResultsFile[0]));
 #else
         SkDebugf("I'm ignoring --outResultsFile because this is a Debug build.");
         return 1;
@@ -1236,6 +1233,7 @@ int main(int argc, char** argv) {
     int runs = 0;
     BenchmarkStream benchStream;
     log.beginObject("results");
+    AutoreleasePool pool;
     while (Benchmark* b = benchStream.next()) {
         std::unique_ptr<Benchmark> bench(b);
         if (CommandLineFlags::ShouldSkip(FLAGS_match, bench->getUniqueName())) {
@@ -1306,6 +1304,11 @@ int main(int argc, char** argv) {
                 for (int s = 0; s < FLAGS_samples; s++) {
                     samples[s] = time(loops, bench.get(), target) / loops;
                 }
+            }
+
+            // Scale each result to the benchmark's own units, time/unit.
+            for (double& sample : samples) {
+                sample *= (1.0 / bench->getUnits());
             }
 
             SkTArray<SkString> keys;
@@ -1422,6 +1425,7 @@ int main(int argc, char** argv) {
                 SkDebugf("%s\n", bench->getUniqueName());
             }
             cleanup_run(target);
+            pool.drain();
         }
         if (!configs.empty()) {
             log.endBench();

@@ -9,31 +9,32 @@
 #include <cstring>
 #include <type_traits>
 
-#include "GrClip.h"
-#include "GrContext.h"
-#include "GrContextPriv.h"
-#include "GrGpu.h"
-#include "GrRecordingContext.h"
-#include "GrRecordingContextPriv.h"
-#include "GrRenderTargetContext.h"
-#include "GrTexture.h"
-#include "GrTextureProducer.h"
-#include "SkAutoPixmapStorage.h"
-#include "SkGr.h"
-#include "SkImage_Gpu.h"
-#include "SkImage_GpuYUVA.h"
-#include "SkMipMap.h"
-#include "SkScopeExit.h"
-#include "SkYUVASizeInfo.h"
-#include "effects/GrYUVtoRGBEffect.h"
+#include "include/core/SkYUVASizeInfo.h"
+#include "include/gpu/GrContext.h"
+#include "include/gpu/GrTexture.h"
+#include "include/private/GrRecordingContext.h"
+#include "src/core/SkAutoPixmapStorage.h"
+#include "src/core/SkMipMap.h"
+#include "src/core/SkScopeExit.h"
+#include "src/gpu/GrClip.h"
+#include "src/gpu/GrContextPriv.h"
+#include "src/gpu/GrGpu.h"
+#include "src/gpu/GrRecordingContextPriv.h"
+#include "src/gpu/GrRenderTargetContext.h"
+#include "src/gpu/GrTextureProducer.h"
+#include "src/gpu/SkGr.h"
+#include "src/gpu/effects/GrYUVtoRGBEffect.h"
+#include "src/image/SkImage_Gpu.h"
+#include "src/image/SkImage_GpuYUVA.h"
 
 static constexpr auto kAssumedColorType = kRGBA_8888_SkColorType;
 
-SkImage_GpuYUVA::SkImage_GpuYUVA(sk_sp<GrContext> context, int width, int height, uint32_t uniqueID,
+SkImage_GpuYUVA::SkImage_GpuYUVA(sk_sp<GrContext> context, SkISize size, uint32_t uniqueID,
                                  SkYUVColorSpace colorSpace, sk_sp<GrTextureProxy> proxies[],
-                                 int numProxies, const SkYUVAIndex yuvaIndices[4],
-                                 GrSurfaceOrigin origin, sk_sp<SkColorSpace> imageColorSpace)
-        : INHERITED(std::move(context), width, height, uniqueID, kAssumedColorType,
+                                 GrColorType proxyColorTypes[], int numProxies,
+                                 const SkYUVAIndex yuvaIndices[4], GrSurfaceOrigin origin,
+                                 sk_sp<SkColorSpace> imageColorSpace)
+        : INHERITED(std::move(context), size, uniqueID, kAssumedColorType,
                     // If an alpha channel is present we always switch to kPremul. This is because,
                     // although the planar data is always un-premul, the final interleaved RGB image
                     // is/would-be premul.
@@ -48,14 +49,14 @@ SkImage_GpuYUVA::SkImage_GpuYUVA(sk_sp<GrContext> context, int width, int height
 
     for (int i = 0; i < numProxies; ++i) {
         fProxies[i] = std::move(proxies[i]);
+        fProxyColorTypes[i] = proxyColorTypes[i];
     }
     memcpy(fYUVAIndices, yuvaIndices, 4*sizeof(SkYUVAIndex));
 }
 
 // For onMakeColorSpace()
 SkImage_GpuYUVA::SkImage_GpuYUVA(const SkImage_GpuYUVA* image, sk_sp<SkColorSpace> targetCS)
-        : INHERITED(image->fContext, image->width(), image->height(), kNeedNewImageUniqueID,
-                    kAssumedColorType,
+        : INHERITED(image->fContext, image->dimensions(), kNeedNewImageUniqueID, kAssumedColorType,
                     // If an alpha channel is present we always switch to kPremul. This is because,
                     // although the planar data is always un-premul, the final interleaved RGB image
                     // is/would-be premul.
@@ -71,15 +72,20 @@ SkImage_GpuYUVA::SkImage_GpuYUVA(const SkImage_GpuYUVA* image, sk_sp<SkColorSpac
         SkASSERT(SkYUVAIndex::AreValidIndices(image->fYUVAIndices, &textureCount));
     SkASSERT(textureCount == fNumProxies);
 
-    for (int i = 0; i < fNumProxies; ++i) {
-        fProxies[i] = image->fProxies[i];  // we ref in this case, not move
+    if (image->fRGBProxy) {
+        fRGBProxy = image->fRGBProxy;  // we ref in this case, not move
+    } else {
+        for (int i = 0; i < fNumProxies; ++i) {
+            fProxies[i] = image->fProxies[i];  // we ref in this case, not move
+            fProxyColorTypes[i] = image->fProxyColorTypes[i];
+        }
     }
     memcpy(fYUVAIndices, image->fYUVAIndices, 4 * sizeof(SkYUVAIndex));
 }
 
-SkImage_GpuYUVA::~SkImage_GpuYUVA() {}
-
 bool SkImage_GpuYUVA::setupMipmapsForPlanes(GrRecordingContext* context) const {
+    // We shouldn't get here if the planes were already flattened to RGBA.
+    SkASSERT(fProxies[0] && !fRGBProxy);
     if (!context || !fContext->priv().matches(context)) {
         return false;
     }
@@ -91,7 +97,8 @@ bool SkImage_GpuYUVA::setupMipmapsForPlanes(GrRecordingContext* context) const {
                                                     fProxies[i].get(),
                                                     GrSamplerState::Filter::kMipMap,
                                                     &copyParams)) {
-            auto mippedProxy = GrCopyBaseMipMapToTextureProxy(context, fProxies[i].get());
+            auto mippedProxy = GrCopyBaseMipMapToTextureProxy(context, fProxies[i].get(),
+                                                              fProxyColorTypes[i]);
             if (!mippedProxy) {
                 return false;
             }
@@ -102,6 +109,24 @@ bool SkImage_GpuYUVA::setupMipmapsForPlanes(GrRecordingContext* context) const {
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
+
+GrSemaphoresSubmitted SkImage_GpuYUVA::onFlush(GrContext* context, const GrFlushInfo& info) {
+    if (!context || !fContext->priv().matches(context) || fContext->abandoned()) {
+        return GrSemaphoresSubmitted::kNo;
+    }
+
+    GrSurfaceProxy* proxies[4] = {fProxies[0].get(), fProxies[1].get(),
+                                  fProxies[2].get(), fProxies[3].get()};
+    int numProxies = fNumProxies;
+    if (fRGBProxy) {
+        // Either we've already flushed the flattening draw or the flattening is unflushed. In the
+        // latter case it should still be ok to just pass fRGBProxy because it in turn depends on
+        // the planar proxies and will cause all of their work to flush as well.
+        proxies[0] = fRGBProxy.get();
+        numProxies = 1;
+    }
+    return context->priv().flushSurfaces(proxies, numProxies, info);
+}
 
 GrTextureProxy* SkImage_GpuYUVA::peekProxy() const {
     return fRGBProxy.get();
@@ -116,14 +141,10 @@ sk_sp<GrTextureProxy> SkImage_GpuYUVA::asTextureProxyRef(GrRecordingContext* con
         return nullptr;
     }
 
-    const GrBackendFormat format =
-        fContext->priv().caps()->getBackendFormatFromColorType(kAssumedColorType);
-
     // Needs to create a render target in order to draw to it for the yuv->rgb conversion.
-    sk_sp<GrRenderTargetContext> renderTargetContext(
-            context->priv().makeDeferredRenderTargetContext(
-                    format, SkBackingFit::kExact, this->width(), this->height(),
-                    kRGBA_8888_GrPixelConfig, this->refColorSpace(), 1, GrMipMapped::kNo, fOrigin));
+    auto renderTargetContext = context->priv().makeDeferredRenderTargetContext(
+            SkBackingFit::kExact, this->width(), this->height(), GrColorType::kRGBA_8888,
+            this->refColorSpace(), 1, GrMipMapped::kNo, fOrigin);
     if (!renderTargetContext) {
         return nullptr;
     }
@@ -140,6 +161,9 @@ sk_sp<GrTextureProxy> SkImage_GpuYUVA::asTextureProxyRef(GrRecordingContext* con
     }
 
     fRGBProxy = renderTargetContext->asTextureProxyRef();
+    for (auto& p : fProxies) {
+        p.reset();
+    }
     return fRGBProxy;
 }
 
@@ -155,7 +179,8 @@ sk_sp<GrTextureProxy> SkImage_GpuYUVA::asMippedTextureProxyRef(GrRecordingContex
     }
 
     // need to generate mips for the proxy
-    if (auto mippedProxy = GrCopyBaseMipMapToTextureProxy(context, proxy.get())) {
+    GrColorType srcColorType = SkColorTypeToGrColorType(this->colorType());
+    if (auto mippedProxy = GrCopyBaseMipMapToTextureProxy(context, proxy.get(), srcColorType)) {
         fRGBProxy = mippedProxy;
         return mippedProxy;
     }
@@ -184,6 +209,12 @@ sk_sp<SkImage> SkImage_GpuYUVA::onMakeColorTypeAndColorSpace(GrRecordingContext*
     return result;
 }
 
+sk_sp<SkImage> SkImage_GpuYUVA::onReinterpretColorSpace(sk_sp<SkColorSpace> newCS) const {
+    return sk_make_sp<SkImage_GpuYUVA>(fContext, this->dimensions(), kNeedNewImageUniqueID,
+                                       fYUVColorSpace, fProxies, fProxyColorTypes, fNumProxies,
+                                       fYUVAIndices, fOrigin, std::move(newCS));
+}
+
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
 sk_sp<SkImage> SkImage::MakeFromYUVATextures(GrContext* ctx,
@@ -203,16 +234,25 @@ sk_sp<SkImage> SkImage::MakeFromYUVATextures(GrContext* ctx,
                                                  imageOrigin, tempTextureProxies)) {
         return nullptr;
     }
+    GrColorType proxyColorTypes[4];
+    for (int i = 0; i < numTextures; ++i) {
+        proxyColorTypes[i] = ctx->priv().caps()->getYUVAColorTypeFromBackendFormat(
+                yuvaTextures[i].getBackendFormat(), yuvaIndices[3].fIndex == i);
+    }
 
-    return sk_make_sp<SkImage_GpuYUVA>(sk_ref_sp(ctx), imageSize.width(), imageSize.height(),
-                                       kNeedNewImageUniqueID, colorSpace, tempTextureProxies,
-                                       numTextures, yuvaIndices, imageOrigin, imageColorSpace);
+    return sk_make_sp<SkImage_GpuYUVA>(sk_ref_sp(ctx), imageSize, kNeedNewImageUniqueID, colorSpace,
+                                       tempTextureProxies, proxyColorTypes, numTextures,
+                                       yuvaIndices, imageOrigin, imageColorSpace);
 }
 
 sk_sp<SkImage> SkImage::MakeFromYUVAPixmaps(
         GrContext* context, SkYUVColorSpace yuvColorSpace, const SkPixmap yuvaPixmaps[],
         const SkYUVAIndex yuvaIndices[4], SkISize imageSize, GrSurfaceOrigin imageOrigin,
         bool buildMips, bool limitToMaxTextureSize, sk_sp<SkColorSpace> imageColorSpace) {
+    if (!context) {
+        return nullptr; // until we impl this for raster backend
+    }
+
     int numPixmaps;
     if (!SkYUVAIndex::AreValidIndices(yuvaIndices, &numPixmaps)) {
         return nullptr;
@@ -225,6 +265,7 @@ sk_sp<SkImage> SkImage::MakeFromYUVAPixmaps(
     // Make proxies
     GrProxyProvider* proxyProvider = context->priv().proxyProvider();
     sk_sp<GrTextureProxy> tempTextureProxies[4];
+    GrColorType proxyColorTypes[4];
     for (int i = 0; i < numPixmaps; ++i) {
         const SkPixmap* pixmap = &yuvaPixmaps[i];
         SkAutoPixmapStorage resized;
@@ -251,10 +292,11 @@ sk_sp<SkImage> SkImage::MakeFromYUVAPixmaps(
         if (!tempTextureProxies[i]) {
             return nullptr;
         }
+        proxyColorTypes[i] = SkColorTypeToGrColorType(bmp.colorType());
     }
 
-    return sk_make_sp<SkImage_GpuYUVA>(sk_ref_sp(context), imageSize.width(), imageSize.height(),
-                                       kNeedNewImageUniqueID, yuvColorSpace, tempTextureProxies,
+    return sk_make_sp<SkImage_GpuYUVA>(sk_ref_sp(context), imageSize, kNeedNewImageUniqueID,
+                                       yuvColorSpace, tempTextureProxies, proxyColorTypes,
                                        numPixmaps, yuvaIndices, imageOrigin, imageColorSpace);
 }
 
@@ -325,23 +367,28 @@ sk_sp<SkImage> SkImage_GpuYUVA::MakePromiseYUVATexture(
 
     // Get lazy proxies
     sk_sp<GrTextureProxy> proxies[4];
+    GrColorType proxyColorTypes[4];
     for (int texIdx = 0; texIdx < numTextures; ++texIdx) {
-        GrPixelConfig config =
-                context->priv().caps()->getYUVAConfigFromBackendFormat(yuvaFormats[texIdx]);
-        if (config == kUnknown_GrPixelConfig) {
+        GrColorType colorType = context->priv().caps()->getYUVAColorTypeFromBackendFormat(
+                                                                yuvaFormats[texIdx],
+                                                                yuvaIndices[3].fIndex == texIdx);
+        if (GrColorType::kUnknown == colorType) {
             return nullptr;
         }
+
         proxies[texIdx] = MakePromiseImageLazyProxy(
-                context, yuvaSizes[texIdx].width(), yuvaSizes[texIdx].height(), imageOrigin, config,
-                yuvaFormats[texIdx], GrMipMapped::kNo, textureFulfillProc, textureReleaseProc,
-                promiseDoneProc, textureContexts[texIdx], version);
+                context, yuvaSizes[texIdx].width(), yuvaSizes[texIdx].height(), imageOrigin,
+                colorType, yuvaFormats[texIdx], GrMipMapped::kNo, textureFulfillProc,
+                textureReleaseProc, promiseDoneProc, textureContexts[texIdx], version);
         ++proxiesCreated;
         if (!proxies[texIdx]) {
             return nullptr;
         }
+        proxyColorTypes[texIdx] = colorType;
     }
 
-    return sk_make_sp<SkImage_GpuYUVA>(sk_ref_sp(context), imageWidth, imageHeight,
-                                       kNeedNewImageUniqueID, yuvColorSpace, proxies, numTextures,
-                                       yuvaIndices, imageOrigin, std::move(imageColorSpace));
+    return sk_make_sp<SkImage_GpuYUVA>(sk_ref_sp(context), SkISize{imageWidth, imageHeight},
+                                       kNeedNewImageUniqueID, yuvColorSpace, proxies,
+                                       proxyColorTypes, numTextures, yuvaIndices, imageOrigin,
+                                       std::move(imageColorSpace));
 }

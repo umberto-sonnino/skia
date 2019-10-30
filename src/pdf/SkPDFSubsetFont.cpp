@@ -1,7 +1,7 @@
 // Copyright 2018 Google LLC.
 // Use of this source code is governed by a BSD-style license that can be found in the LICENSE file.
 
-#include "SkPDFSubsetFont.h"
+#include "src/pdf/SkPDFSubsetFont.h"
 
 #if defined(SK_USING_THIRD_PARTY_ICU)
 #include "SkLoadICU.h"
@@ -9,20 +9,28 @@
 
 #if defined(SK_PDF_USE_HARFBUZZ_SUBSET)
 
-#include "SkTo.h"
-#include "SkTemplates.h"
+#include "include/private/SkTemplates.h"
+#include "include/private/SkTo.h"
+#include "src/utils/SkCallableTraits.h"
 
 #include "hb.h"
 #include "hb-subset.h"
 
-template <class T, void(*P)(T*)> using resource = std::unique_ptr<T, SkFunctionWrapper<void, T, P>>;
-using HBBlob = resource<hb_blob_t, hb_blob_destroy>;
-using HBFace = resource<hb_face_t, hb_face_destroy>;
-using HBSubsetInput = resource<hb_subset_input_t, hb_subset_input_destroy>;
-using HBSet = resource<hb_set_t, hb_set_destroy>;
+template <class T, void(*P)(T*)> using resource =
+    std::unique_ptr<T, SkFunctionWrapper<skstd::remove_pointer_t<decltype(P)>, P>>;
+using HBBlob = resource<hb_blob_t, &hb_blob_destroy>;
+using HBFace = resource<hb_face_t, &hb_face_destroy>;
+using HBSubsetInput = resource<hb_subset_input_t, &hb_subset_input_destroy>;
+using HBSet = resource<hb_set_t, &hb_set_destroy>;
 
 static HBBlob to_blob(sk_sp<SkData> data) {
-    return HBBlob(hb_blob_create((char*)data->data(), SkToUInt(data->size()),
+    using blob_size_t = SkCallableTraits<decltype(hb_blob_create)>::argument<1>::type;
+    if (!SkTFitsIn<blob_size_t>(data->size())) {
+        return nullptr;
+    }
+    const char* blobData = static_cast<const char*>(data->data());
+    blob_size_t blobSize = SkTo<blob_size_t>(data->size());
+    return HBBlob(hb_blob_create(blobData, blobSize,
                                  HB_MEMORY_MODE_READONLY,
                                  data.release(), [](void* p){ ((SkData*)p)->unref(); }));
 }
@@ -61,12 +69,12 @@ static sk_sp<SkData> subset_harfbuzz(sk_sp<SkData> fontData,
         return nullptr;
     }
     hb_set_t* glyphs = hb_subset_input_glyph_set(input.get());
-    hb_set_add(glyphs, 0);
     glyphUsage.getSetValues([&glyphs](unsigned gid) { hb_set_add(glyphs, gid);});
 
     hb_subset_input_set_retain_gids(input.get(), true);
-    hb_subset_input_set_drop_hints(input.get(), true);
-    hb_subset_input_set_drop_layout(input.get(), true);
+    // TODO: When possible, check if a font is 'tricky' with FT_IS_TRICKY.
+    // If it isn't known if a font is 'tricky', retain the hints.
+    hb_subset_input_set_drop_hints(input.get(), false);
     HBFace subset(hb_subset(face.get(), input.get()));
     HBBlob result(hb_face_reference_blob(subset.get()));
     return to_data(std::move(result));
@@ -93,9 +101,6 @@ static sk_sp<SkData> subset_sfntly(sk_sp<SkData> fontData,
     // Generate glyph id array in format needed by sfntly.
     // TODO(halcanary): sfntly should take a more compact format.
     std::vector<unsigned> subset;
-    if (!glyphUsage.has(0)) {
-        subset.push_back(0);  // Always include glyph 0.
-    }
     glyphUsage.getSetValues([&subset](unsigned v) { subset.push_back(v); });
 
     unsigned char* subsetFont{nullptr};

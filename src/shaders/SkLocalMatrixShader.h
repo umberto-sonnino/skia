@@ -8,9 +8,9 @@
 #ifndef SkLocalMatrixShader_DEFINED
 #define SkLocalMatrixShader_DEFINED
 
-#include "SkShaderBase.h"
-#include "SkReadBuffer.h"
-#include "SkWriteBuffer.h"
+#include "src/core/SkReadBuffer.h"
+#include "src/core/SkWriteBuffer.h"
+#include "src/shaders/SkShaderBase.h"
 
 class GrFragmentProcessor;
 class SkArenaAlloc;
@@ -36,6 +36,8 @@ public:
         }
         return fProxyShader;
     }
+
+    SkPicture* isAPicture(SkMatrix*, SkTileMode[2], SkRect* tile) const override;
 
 protected:
     void flatten(SkWriteBuffer&) const override;

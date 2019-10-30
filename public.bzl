@@ -235,7 +235,6 @@ BASE_SRCS_ALL = struct(
         "src/utils/win/**/*",
 
         # Exclude multiple definitions.
-        "src/core/SkPicture_none.cpp",
         "src/gpu/GrPathRendering_none.cpp",
         "src/gpu/ccpr/GrCoverageCountingPathRenderer_none.cpp",
         "src/gpu/gl/GrGLMakeNativeInterface_none.cpp",
@@ -251,6 +250,9 @@ BASE_SRCS_ALL = struct(
         # Currently exclude all vulkan specific files
         "src/gpu/vk/*",
 
+        # Currently exclude all Dawn-specific files
+        "src/gpu/dawn/*",
+
         # Defines main.
         "src/sksl/SkSLMain.cpp",
 
@@ -259,9 +261,6 @@ BASE_SRCS_ALL = struct(
 
         # Atlas text
         "src/atlastext/*",
-
-        # Compute backend not yet even hooked into Skia.
-        "src/compute/**/*",
     ],
 )
 
@@ -276,7 +275,7 @@ def codec_srcs(limited):
             "src/codec/*Webp*.cpp",
             "src/codec/*Png*",
         ]
-    return native.glob(["src/codec/*.cpp", "third_party/etc1/*.cpp", "third_party/gif/*.cpp"], exclude = exclude)
+    return native.glob(["src/codec/*.cpp", "third_party/gif/*.cpp"], exclude = exclude)
 
 GL_SRCS_UNIX = struct(
     include = [
@@ -409,6 +408,7 @@ def skia_srcs(os_conditions):
 
 # Includes needed by Skia implementation.  Not public includes.
 INCLUDES = [
+    ".",
     "include/android",
     "include/c",
     "include/codec",
@@ -421,6 +421,7 @@ INCLUDES = [
     "include/pathops",
     "include/ports",
     "include/private",
+    "include/third_party/skcms",
     "include/utils",
     "include/utils/mac",
     "src/codec",
@@ -437,7 +438,6 @@ INCLUDES = [
     "src/shaders/gradients",
     "src/sksl",
     "src/utils",
-    "third_party/etc1",
     "third_party/gif",
 ]
 
@@ -455,12 +455,13 @@ DM_SRCS_ALL = struct(
         "experimental/svg/model/*.h",
         "gm/*.cpp",
         "gm/*.h",
+        "src/utils/SkMultiPictureDocument.cpp",
         "src/xml/*.cpp",
         "tests/*.cpp",
         "tests/*.h",
-        "tools/ios_utils.h",
-        "tools/BinaryAsset.h",
+        "tools/AutoreleasePool.h",
         "tools/BigPathBench.inc",
+        "tools/BinaryAsset.h",
         "tools/CrashHandler.cpp",
         "tools/CrashHandler.h",
         "tools/DDLPromiseImageHelper.cpp",
@@ -475,6 +476,13 @@ DM_SRCS_ALL = struct(
         "tools/ResourceFactory.h",
         "tools/Resources.cpp",
         "tools/Resources.h",
+        "tools/SkMetaData.cpp",
+        "tools/SkMetaData.h",
+        "tools/SkSharingProc.cpp",
+        "tools/SkVMBuilders.cpp",
+        "tools/SkVMBuilders.h",
+        "tools/ToolUtils.cpp",
+        "tools/ToolUtils.h",
         "tools/UrlDataManager.cpp",
         "tools/UrlDataManager.h",
         "tools/debugger/*.cpp",
@@ -490,16 +498,15 @@ DM_SRCS_ALL = struct(
         "tools/fonts/TestTypeface.cpp",
         "tools/fonts/TestTypeface.h",
         "tools/fonts/ToolUtilsFont.cpp",
+        "tools/fonts/test_font_index.inc",
         "tools/fonts/test_font_monospace.inc",
         "tools/fonts/test_font_sans_serif.inc",
         "tools/fonts/test_font_serif.inc",
-        "tools/fonts/test_font_index.inc",
         "tools/gpu/**/*.cpp",
         "tools/gpu/**/*.h",
+        "tools/ios_utils.h",
         "tools/random_parse_path.cpp",
         "tools/random_parse_path.h",
-        "tools/ToolUtils.cpp",
-        "tools/ToolUtils.h",
         "tools/timer/*.cpp",
         "tools/timer/*.h",
         "tools/trace/*.cpp",
@@ -507,10 +514,13 @@ DM_SRCS_ALL = struct(
     ],
     exclude = [
         "gm/cgms.cpp",
+        "gm/fiddle.cpp",
+        "gm/video_decoder.cpp",
         "tests/FontMgrAndroidParserTest.cpp",  # Android-only.
         "tests/FontMgrFontConfigTest.cpp",  # FontConfig-only.
         "tests/skia_test.cpp",  # Old main.
         "tools/gpu/atlastext/*",
+        "tools/gpu/dawn/*",
         "tools/gpu/gl/angle/*",
         "tools/gpu/gl/egl/*",
         "tools/gpu/gl/glx/*",
@@ -536,36 +546,6 @@ def dm_srcs(os_conditions):
             [],
         ],
     )
-
-################################################################################
-## DM_INCLUDES
-################################################################################
-
-DM_INCLUDES = [
-    "dm",
-    "gm",
-    "experimental/pipe",
-    "experimental/svg/model",
-    "src/codec",
-    "src/core",
-    "src/effects",
-    "src/fonts",
-    "src/images",
-    "src/pathops",
-    "src/pipe/utils",
-    "src/ports",
-    "src/shaders",
-    "src/shaders/gradients",
-    "src/xml",
-    "tests",
-    "tools",
-    "tools/debugger",
-    "tools/flags",
-    "tools/fonts",
-    "tools/gpu",
-    "tools/timer",
-    "tools/trace",
-]
 
 ################################################################################
 ## DM_ARGS
@@ -622,6 +602,8 @@ def base_defines(os_conditions):
         "SK_BUILD_FOR_GOOGLE3",
         # Required for building dm.
         "GR_TEST_UTILS",
+        # Google3 probably doesn't want this feature yet
+        "SK_DISABLE_REDUCE_OPLIST_SPLITTING",
         # Staging flags for API changes
         # Should remove after we update golden images
         "SK_WEBP_ENCODER_USE_DEFAULT_METHOD",
@@ -629,6 +611,8 @@ def base_defines(os_conditions):
         "SK_DISABLE_LOWP_RASTER_PIPELINE",
         # JPEG is in codec_limited
         "SK_HAS_JPEG_LIBRARY",
+        # Needed for some tests in dm
+        "SK_ENABLE_SKSL_INTERPRETER",
     ] + skia_select(
         os_conditions,
         [
@@ -636,7 +620,7 @@ def base_defines(os_conditions):
             [
                 "PNG_SKIP_SETJMP_CHECK",
                 "SK_BUILD_FOR_UNIX",
-                "SK_SAMPLES_FOR_X",
+                "SK_R32_SHIFT=16",
                 "SK_PDF_USE_SFNTLY",
                 "SK_HAS_PNG_LIBRARY",
                 "SK_HAS_WEBP_LIBRARY",
@@ -685,13 +669,78 @@ def base_linkopts(os_conditions):
     )
 
 ################################################################################
-## skottie_tool
+## sksg_lib
 ################################################################################
 
-SKOTTIE_TOOL_INCLUDES = [
-    "modules/skottie/utils",
-    "tools/flags",
+def sksg_lib_hdrs():
+    return native.glob(["modules/sksg/include/*.h"])
+
+def sksg_lib_srcs():
+    return native.glob([
+        "modules/sksg/src/*.cpp",
+        "modules/sksg/src/*.h",
+    ])
+
+################################################################################
+## skparagraph_lib
+################################################################################
+
+def skparagraph_lib_hdrs():
+    return native.glob(["modules/skparagraph/include/*.h"])
+
+def skparagraph_lib_srcs():
+    return native.glob(["modules/skparagraph/src/*.cpp"])
+
+################################################################################
+## experimental xform
+################################################################################
+
+def exp_xform_lib_hdrs():
+    return native.glob(["experimental/xform/*.h"])
+
+def exp_xform_lib_srcs():
+    return native.glob(["experimental/xform/*.cpp"])
+
+################################################################################
+## skottie_lib
+################################################################################
+
+def skottie_lib_hdrs():
+    return native.glob(["modules/skottie/include/*.h"])
+
+def skottie_lib_srcs():
+    return native.glob(
+        [
+            "modules/skottie/src/*.cpp",
+            "modules/skottie/src/*.h",
+            "modules/skottie/src/effects/*.cpp",
+            "modules/skottie/src/effects/*.h",
+            "modules/skottie/src/layers/*.cpp",
+            "modules/skottie/src/layers/*.h",
+            "modules/skottie/src/text/*.cpp",
+            "modules/skottie/src/text/*.h",
+        ],
+        exclude = [
+            "modules/skottie/src/SkottieTest.cpp",
+            "modules/skottie/src/SkottieTool.cpp",
+        ],
+    )
+
+################################################################################
+## skottie_shaper
+################################################################################
+
+SKOTTIE_SHAPER_HDRS = [
+    "modules/skottie/src/text/SkottieShaper.h",
 ]
+
+SKOTTIE_SHAPER_SRCS = [
+    "modules/skottie/src/text/SkottieShaper.cpp",
+]
+
+################################################################################
+## skottie_tool
+################################################################################
 
 SKOTTIE_TOOL_SRCS = [
     "modules/skottie/src/SkottieTool.cpp",
@@ -705,10 +754,6 @@ SKOTTIE_TOOL_SRCS = [
 ################################################################################
 ## SkShaper
 ################################################################################
-
-SKSHAPER_INCLUDES = [
-    "modules/skshaper/include",
-]
 
 SKSHAPER_HARFBUZZ_SRCS = [
     "modules/skshaper/include/SkShaper.h",

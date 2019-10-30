@@ -5,9 +5,9 @@
  * found in the LICENSE file.
  */
 
-#include "SkSLCompiler.h"
+#include "src/sksl/SkSLCompiler.h"
 
-#include "Test.h"
+#include "tests/Test.h"
 
 static void test_failure(skiatest::Reporter* r, const char* src, const char* error) {
     SkSL::Compiler compiler;
@@ -35,6 +35,12 @@ static void test_success(skiatest::Reporter* r, const char* src) {
     std::unique_ptr<SkSL::Program> program = compiler.convertProgram(SkSL::Program::kFragment_Kind,
                                                                      SkSL::String(src), settings);
     REPORTER_ASSERT(r, program);
+}
+
+DEF_TEST(SkSLOpenArray, r) {
+    test_failure(r,
+                 "void main(inout float4 color) { color.r[ = ( color.g ); }",
+                 "error: 1: expected expression, but found '='\n1 error\n");
 }
 
 DEF_TEST(SkSLUndefinedSymbol, r) {
@@ -164,6 +170,12 @@ DEF_TEST(SkSLSwizzleDuplicateOutput, r) {
     test_failure(r,
                  "void main() { float4 test = float4(1); test.xyyz = float4(1); }",
                  "error: 1: cannot write to the same swizzle field more than once\n1 error\n");
+}
+
+DEF_TEST(SkSLSwizzleConstantOutput, r) {
+    test_failure(r,
+                 "void main() { float4 test = float4(1); test.xyz0 = float4(1); }",
+                 "error: 1: cannot write to a swizzle mask containing a constant\n1 error\n");
 }
 
 DEF_TEST(SkSLAssignmentTypeMismatch, r) {
@@ -511,8 +523,8 @@ DEF_TEST(SkSLDuplicateOutput, r) {
                  "error: 1: out location=0, index=0 is reserved for sk_FragColor\n1 error\n");
 }
 
-DEF_TEST(SkSLConstantSwizzleNotLast, r) {
+DEF_TEST(SkSLSpuriousFloat, r) {
     test_failure(r,
-                 "void main() { sk_FragColor = half4(1).rg00; }",
-                 "error: 1: only the last swizzle component can be a constant\n1 error\n");
+                 "void main() { float x; x = 1.5 2.5; }",
+                 "error: 1: expected ';', but found '2.5'\n1 error\n");
 }

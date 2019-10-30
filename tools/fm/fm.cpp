@@ -1,38 +1,39 @@
 // Copyright 2019 Google LLC.
 // Use of this source code is governed by a BSD-style license that can be found in the LICENSE file.
 
-#include "CommandLineFlags.h"
-#include "CommonFlags.h"
-#include "EventTracingPriv.h"
-#include "GrContextFactory.h"
-#include "GrContextOptions.h"
-#include "GrContextPriv.h"
-#include "GrGpu.h"
-#include "GrPersistentCacheUtils.h"
-#include "HashAndEncode.h"
-#include "MemoryCache.h"
-#include "SkCodec.h"
-#include "SkColorSpace.h"
-#include "SkColorSpacePriv.h"
-#include "SkGraphics.h"
-#include "SkMD5.h"
-#include "SkOSFile.h"
-#include "SkOSPath.h"
-#include "SkPDFDocument.h"
-#include "SkPicture.h"
-#include "SkPictureRecorder.h"
-#include "SkSVGDOM.h"
-#include "SkTHash.h"
-#include "ToolUtils.h"
-#include "gm.h"
+#include "experimental/svg/model/SkSVGDOM.h"
+#include "gm/gm.h"
+#include "include/codec/SkCodec.h"
+#include "include/core/SkColorSpace.h"
+#include "include/core/SkGraphics.h"
+#include "include/core/SkPicture.h"
+#include "include/core/SkPictureRecorder.h"
+#include "include/docs/SkPDFDocument.h"
+#include "include/gpu/GrContextOptions.h"
+#include "include/private/SkTHash.h"
+#include "src/core/SkColorSpacePriv.h"
+#include "src/core/SkMD5.h"
+#include "src/core/SkOSFile.h"
+#include "src/gpu/GrContextPriv.h"
+#include "src/gpu/GrGpu.h"
+#include "src/utils/SkOSPath.h"
+#include "tools/AutoreleasePool.h"
+#include "tools/CrashHandler.h"
+#include "tools/HashAndEncode.h"
+#include "tools/ToolUtils.h"
+#include "tools/flags/CommandLineFlags.h"
+#include "tools/flags/CommonFlags.h"
+#include "tools/gpu/GrContextFactory.h"
+#include "tools/gpu/MemoryCache.h"
+#include "tools/trace/EventTracingPriv.h"
 #include <chrono>
 #include <functional>
 #include <stdio.h>
 #include <stdlib.h>
 
 #if defined(SK_ENABLE_SKOTTIE)
-    #include "Skottie.h"
-    #include "SkottieUtils.h"
+    #include "modules/skottie/include/Skottie.h"
+    #include "modules/skottie/utils/SkottieUtils.h"
 #endif
 
 using sk_gpu_test::GrContextFactory;
@@ -47,7 +48,6 @@ static DEFINE_string(tf    ,   "srgb", "The transfer function for any raster bac
 static DEFINE_bool  (legacy,    false, "Use a null SkColorSpace instead of --gamut and --tf?");
 
 static DEFINE_int   (samples ,         0, "Samples per pixel in GPU backends.");
-static DEFINE_bool  (nvpr    ,     false, "Use NV_path_rendering in GPU backends?");
 static DEFINE_bool  (stencils,      true, "If false, avoid stencil buffers in GPU backends.");
 static DEFINE_bool  (dit     ,     false, "Use device-independent text in GPU backends.");
 static DEFINE_string(surf    , "default", "Backing store for GPU backend surfaces.");
@@ -94,11 +94,6 @@ static bool parse_flag(const CommandLineFlags::StringArray& flag,
         fprintf(stderr, "    --%s %s\n", flag_name, entry.label);
     }
     return false;
-}
-
-static void exit_with_failure() {
-    // TODO: dump stack trace, debug trap, print currently running job, etc?
-    exit(1);
 }
 
 struct Result {
@@ -148,8 +143,7 @@ static void init(Source* source, std::shared_ptr<SkCodec> codec) {
     source->draw = [codec](SkCanvas* canvas) {
         SkImageInfo info = codec->getInfo();
         if (FLAGS_decodeToDst) {
-            info = canvas->imageInfo().makeWH(info.width(),
-                                              info.height());
+            info = canvas->imageInfo().makeDimensions(info.dimensions());
         }
 
         SkBitmap bm;
@@ -260,8 +254,7 @@ static sk_sp<SkImage> draw_with_gpu(std::function<bool(SkCanvas*)> draw,
         return nullptr;
     }
 
-    auto overrides = FLAGS_nvpr ? GrContextFactory::ContextOverrides::kRequireNVPRSupport
-                                : GrContextFactory::ContextOverrides::kDisableNVPR;
+    auto overrides = GrContextFactory::ContextOverrides::kNone;
     if (!FLAGS_stencils) { overrides |= GrContextFactory::ContextOverrides::kAvoidStencilBuffers; }
 
     GrContext* context = factory->getContextInfo(api, overrides)
@@ -285,13 +278,12 @@ static sk_sp<SkImage> draw_with_gpu(std::function<bool(SkCanvas*)> draw,
             break;
 
         case SurfaceType::kBackendTexture:
-            backendTexture = context->priv().getGpu()
-                ->createTestingOnlyBackendTexture(nullptr,
-                                                  info.width(),
-                                                  info.height(),
-                                                  info.colorType(),
-                                                  true,
-                                                  GrMipMapped::kNo);
+            backendTexture = context->createBackendTexture(info.width(),
+                                                           info.height(),
+                                                           info.colorType(),
+                                                           GrMipMapped::kNo,
+                                                           GrRenderable::kYes,
+                                                           GrProtected::kNo);
             surface = SkSurface::MakeFromBackendTexture(context,
                                                         backendTexture,
                                                         kTopLeft_GrSurfaceOrigin,
@@ -338,7 +330,7 @@ static sk_sp<SkImage> draw_with_gpu(std::function<bool(SkCanvas*)> draw,
     if (!context->abandoned()) {
         surface.reset();
         if (backendTexture.isValid()) {
-            context->priv().getGpu()->deleteTestingOnlyBackendTexture(backendTexture);
+            context->deleteBackendTexture(backendTexture);
         }
         if (backendRT.isValid()) {
             context->priv().getGpu()->deleteTestingOnlyBackendRenderTarget(backendRT);
@@ -350,6 +342,7 @@ static sk_sp<SkImage> draw_with_gpu(std::function<bool(SkCanvas*)> draw,
 
 int main(int argc, char** argv) {
     CommandLineFlags::Parse(argc, argv);
+    SetupCrashHandler();
 
     if (FLAGS_cpuDetect) {
         SkGraphics::Init();
@@ -364,12 +357,12 @@ int main(int argc, char** argv) {
     sk_gpu_test::MemoryCache memoryCache;
     if (!FLAGS_writeShaders.isEmpty()) {
         baseOptions.fPersistentCache = &memoryCache;
-        baseOptions.fDisallowGLSLBinaryCaching = true;
+        baseOptions.fShaderCacheStrategy = GrContextOptions::ShaderCacheStrategy::kBackendSource;
     }
 
     SkTHashMap<SkString, skiagm::GMFactory> gm_factories;
     for (skiagm::GMFactory factory : skiagm::GMRegistry::Range()) {
-        std::unique_ptr<skiagm::GM> gm{factory(nullptr)};
+        std::unique_ptr<skiagm::GM> gm{factory()};
         if (FLAGS_sources.isEmpty()) {
             fprintf(stdout, "%s\n", gm->getName());
         } else {
@@ -385,9 +378,9 @@ int main(int argc, char** argv) {
         Source* source = &sources.push_back();
 
         if (skiagm::GMFactory* factory = gm_factories.find(name)) {
-            std::shared_ptr<skiagm::GM> gm{(*factory)(nullptr)};
+            std::shared_ptr<skiagm::GM> gm{(*factory)()};
             source->name = name;
-            init(source, gm);
+            init(source, std::move(gm));
             continue;
         }
 
@@ -476,7 +469,7 @@ int main(int argc, char** argv) {
     };
     const FlagOption<skcms_TransferFunction> kTransferFunctions[] = {
         { "srgb"   , SkNamedTransferFn::kSRGB },
-        { "rec2020", {2.22222f, 0.909672f, 0.0903276f, 0.222222f, 0.0812429f, 0, 0} },
+        { "rec2020", SkNamedTransferFn::kRec2020 },
         { "2.2"    , SkNamedTransferFn::k2Dot2 },
         { "linear" , SkNamedTransferFn::kLinear },
     };
@@ -500,12 +493,13 @@ int main(int argc, char** argv) {
                                           : SkColorSpace::MakeRGB(tf,gamut);
     const SkImageInfo unsized_info = SkImageInfo::Make(0,0, ct,at,cs);
 
+    AutoreleasePool pool;
     for (auto source : sources) {
         const auto start = std::chrono::steady_clock::now();
         fprintf(stdout, "%50s", source.name.c_str());
+        fflush(stdout);
 
-        const SkImageInfo info = unsized_info.makeWH(source.size.width(),
-                                                     source.size.height());
+        const SkImageInfo info = unsized_info.makeDimensions(source.size);
 
         auto draw = [&source](SkCanvas* canvas) {
             Result result = source.draw(canvas);
@@ -513,8 +507,7 @@ int main(int argc, char** argv) {
                 case Result::Ok:   break;
                 case Result::Skip: return false;
                 case Result::Fail:
-                    fprintf(stderr, "%s failed: %s\n", source.name.c_str(), result.failure.c_str());
-                    exit_with_failure();
+                    SK_ABORT(result.failure.c_str());
             }
             return true;
         };
@@ -550,8 +543,7 @@ int main(int argc, char** argv) {
 
         SkBitmap bitmap;
         if (image && !image->asLegacyBitmap(&bitmap)) {
-            fprintf(stderr, "SkImage::asLegacyBitmap() failed.\n");
-            exit_with_failure();
+            SK_ABORT("SkImage::asLegacyBitmap() failed.");
         }
 
         HashAndEncode hashAndEncode{bitmap};
@@ -577,8 +569,7 @@ int main(int argc, char** argv) {
             if (image) {
                 if (!hashAndEncode.writePngTo(path.c_str(), md5.c_str(),
                                               FLAGS_key, FLAGS_properties)) {
-                    fprintf(stderr, "Could not write to %s.\n", path.c_str());
-                    exit_with_failure();
+                    SK_ABORT("Could not write .png.");
                 }
             } else {
                 SkFILEWStream file(path.c_str());
@@ -590,6 +581,7 @@ int main(int argc, char** argv) {
         fprintf(stdout, "\t%s\t%7dms\n",
                 md5.c_str(),
                 (int)std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count());
+        pool.drain();
     }
 
     if (!FLAGS_writeShaders.isEmpty()) {

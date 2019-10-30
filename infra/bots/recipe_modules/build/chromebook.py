@@ -2,6 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+from . import util
 
 def compile_fn(api, checkout_root, out_dir):
   skia_dir      = checkout_root.join('skia')
@@ -73,6 +74,7 @@ def compile_fn(api, checkout_root, out_dir):
     'skia_use_fontconfig': 'false',
     'skia_use_system_freetype2': 'false',
     'skia_use_egl': 'true',
+    'werror': 'true',
   }
   extra_cflags.append('-DDUMMY_clang_linux_version=%s' %
                       api.run.asset_version('clang_linux', skia_dir))
@@ -95,5 +97,5 @@ def compile_fn(api, checkout_root, out_dir):
             cmd=['ninja', '-C', out_dir, 'nanobench', 'dm'])
 
 
-def copy_extra_build_products(api, src, dst):
-  pass
+def copy_build_products(api, src, dst):
+  util.copy_listed_files(api, src, dst, util.DEFAULT_BUILD_PRODUCTS)

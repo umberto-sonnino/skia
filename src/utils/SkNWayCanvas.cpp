@@ -5,8 +5,8 @@
  * found in the LICENSE file.
  */
 
-#include "SkNWayCanvas.h"
-#include "SkCanvasPriv.h"
+#include "include/utils/SkNWayCanvas.h"
+#include "src/core/SkCanvasPriv.h"
 
 SkNWayCanvas::SkNWayCanvas(int width, int height) : INHERITED(width, height) {}
 
@@ -144,6 +144,13 @@ void SkNWayCanvas::onDrawPaint(const SkPaint& paint) {
     Iter iter(fList);
     while (iter.next()) {
         iter->drawPaint(paint);
+    }
+}
+
+void SkNWayCanvas::onDrawBehind(const SkPaint& paint) {
+    Iter iter(fList);
+    while (iter.next()) {
+        SkCanvasPriv::DrawBehind(iter.get(), paint);
     }
 }
 
@@ -333,7 +340,7 @@ void SkNWayCanvas::onDrawAnnotation(const SkRect& rect, const char key[], SkData
 }
 
 void SkNWayCanvas::onDrawEdgeAAQuad(const SkRect& rect, const SkPoint clip[4],
-                                    QuadAAFlags aa, SkColor color, SkBlendMode mode) {
+                                    QuadAAFlags aa, const SkColor4f& color, SkBlendMode mode) {
     Iter iter(fList);
     while (iter.next()) {
         iter->experimental_DrawEdgeAAQuad(rect, clip, aa, color, mode);

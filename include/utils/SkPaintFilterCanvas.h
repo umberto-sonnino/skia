@@ -8,9 +8,8 @@
 #ifndef SkPaintFilterCanvas_DEFINED
 #define SkPaintFilterCanvas_DEFINED
 
-#include "SkCanvasVirtualEnforcer.h"
-#include "SkNWayCanvas.h"
-#include "SkTLazy.h"
+#include "include/core/SkCanvasVirtualEnforcer.h"
+#include "include/utils/SkNWayCanvas.h"
 
 class SkAndroidFrameworkUtils;
 
@@ -38,8 +37,6 @@ public:
     }
 
 protected:
-    /** DEPRECATED */
-    virtual bool onFilter(SkTCopyOnFirstWrite<SkPaint>* paint, Type type) const;
     /**
      *  Called with the paint that will be used to draw the specified type.
      *  The implementation may modify the paint as they wish.
@@ -51,9 +48,10 @@ protected:
      *        To also filter encapsulated paints (e.g. SkPicture, SkTextBlob), clients may need to
      *        override the relevant methods (i.e. drawPicture, drawTextBlob).
      */
-    virtual bool onFilter(SkPaint& paint) const;
+    virtual bool onFilter(SkPaint& paint) const = 0;
 
     void onDrawPaint(const SkPaint&) override;
+    void onDrawBehind(const SkPaint&) override;
     void onDrawPoints(PointMode, size_t count, const SkPoint pts[], const SkPaint&) override;
     void onDrawRect(const SkRect&, const SkPaint&) override;
     void onDrawRRect(const SkRRect&, const SkPaint&) override;
@@ -91,7 +89,7 @@ protected:
     void onDrawAnnotation(const SkRect& rect, const char key[], SkData* value) override;
     void onDrawShadowRec(const SkPath& path, const SkDrawShadowRec& rec) override;
 
-    void onDrawEdgeAAQuad(const SkRect&, const SkPoint[4], QuadAAFlags, SkColor,
+    void onDrawEdgeAAQuad(const SkRect&, const SkPoint[4], QuadAAFlags, const SkColor4f&,
                           SkBlendMode) override;
     void onDrawEdgeAAImageSet(const ImageSetEntry[], int count, const SkPoint[], const SkMatrix[],
                               const SkPaint*, SrcRectConstraint) override;

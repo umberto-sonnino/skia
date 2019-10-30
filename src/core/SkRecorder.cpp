@@ -5,15 +5,15 @@
  * found in the LICENSE file.
  */
 
-#include "SkRecorder.h"
+#include "src/core/SkRecorder.h"
 
-#include "SkBigPicture.h"
-#include "SkCanvasPriv.h"
-#include "SkImage.h"
-#include "SkPatchUtils.h"
-#include "SkPicture.h"
-#include "SkSurface.h"
-#include "SkTo.h"
+#include "include/core/SkImage.h"
+#include "include/core/SkPicture.h"
+#include "include/core/SkSurface.h"
+#include "include/private/SkTo.h"
+#include "src/core/SkBigPicture.h"
+#include "src/core/SkCanvasPriv.h"
+#include "src/utils/SkPatchUtils.h"
 
 #include <new>
 
@@ -58,8 +58,7 @@ void SkRecorder::reset(SkRecord* record, const SkRect& bounds,
     this->forgetRecord();
     fDrawPictureMode = dpm;
     fRecord = record;
-    SkIRect rounded = bounds.roundOut();
-    this->resetCanvas(rounded.right(), rounded.bottom());
+    this->resetCanvas(bounds.roundOut());
     fMiniRecorder = mr;
 }
 
@@ -137,6 +136,10 @@ void SkRecorder::flushMiniRecorder() {
 
 void SkRecorder::onDrawPaint(const SkPaint& paint) {
     this->append<SkRecords::DrawPaint>(paint);
+}
+
+void SkRecorder::onDrawBehind(const SkPaint& paint) {
+    this->append<SkRecords::DrawBehind>(paint);
 }
 
 void SkRecorder::onDrawPoints(PointMode mode,
@@ -263,6 +266,14 @@ void SkRecorder::onDrawPicture(const SkPicture* pic, const SkMatrix* matrix, con
     if (fDrawPictureMode == Record_DrawPictureMode) {
         fApproxBytesUsedBySubPictures += pic->approximateBytesUsed();
         this->append<SkRecords::DrawPicture>(this->copy(paint), sk_ref_sp(pic), matrix ? *matrix : SkMatrix::I());
+    } else if (fDrawPictureMode == PlaybackTop_DrawPictureMode) {
+        // temporarily change the mode of this recorder to Record,
+        fDrawPictureMode = Record_DrawPictureMode;
+        // play back the top level picture
+        SkAutoCanvasMatrixPaint acmp(this, matrix, paint, pic->cullRect());
+        pic->playback(this);
+        // restore the mode
+        fDrawPictureMode = PlaybackTop_DrawPictureMode;
     } else {
         SkASSERT(fDrawPictureMode == Playback_DrawPictureMode);
         SkAutoCanvasMatrixPaint acmp(this, matrix, paint, pic->cullRect());
@@ -311,7 +322,7 @@ void SkRecorder::onDrawAnnotation(const SkRect& rect, const char key[], SkData* 
 }
 
 void SkRecorder::onDrawEdgeAAQuad(const SkRect& rect, const SkPoint clip[4],
-                                  QuadAAFlags aa, SkColor color, SkBlendMode mode) {
+                                  QuadAAFlags aa, const SkColor4f& color, SkBlendMode mode) {
     this->append<SkRecords::DrawEdgeAAQuad>(
             rect, this->copy(clip, 4), aa, color, mode);
 }

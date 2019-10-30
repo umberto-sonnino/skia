@@ -4,14 +4,16 @@
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
-#include "Benchmark.h"
-#include "SkBitmap.h"
-#include "SkCanvas.h"
-#include "SkColorPriv.h"
-#include "SkGradientShader.h"
-#include "SkPaint.h"
-#include "SkShader.h"
-#include "SkString.h"
+#include "bench/Benchmark.h"
+#include "include/core/SkBitmap.h"
+#include "include/core/SkCanvas.h"
+#include "include/core/SkColorPriv.h"
+#include "include/core/SkPaint.h"
+#include "include/core/SkShader.h"
+#include "include/core/SkString.h"
+#include "include/effects/SkGradientShader.h"
+
+#include "tools/ToolUtils.h"
 
 struct GradData {
     int             fCount;
@@ -155,20 +157,6 @@ enum GeomType {
     kOval_GeomType
 };
 
-static const char* tilemodename(SkTileMode tm) {
-    switch (tm) {
-        case SkTileMode::kClamp:
-            return "clamp";
-        case SkTileMode::kRepeat:
-            return "repeat";
-        case SkTileMode::kMirror:
-            return "mirror";
-        case SkTileMode::kDecal:
-            return "decal";
-    }
-    return "";
-}
-
 static const char* geomtypename(GeomType gt) {
     switch (gt) {
         case kRect_GeomType:
@@ -193,7 +181,7 @@ public:
         : fGeomType(geomType) {
 
         fName.printf("gradient_%s_%s", gGrads[gradType].fName,
-                     tilemodename(tm));
+                     ToolUtils::tilemode_name(tm));
         if (geomType != kRect_GeomType) {
             fName.appendf("_%s", geomtypename(geomType));
         }
@@ -211,7 +199,7 @@ public:
     GradientBench(GradType gradType, GradData data, bool dither)
         : fGeomType(kRect_GeomType) {
 
-        const char *tmname = tilemodename(SkTileMode::kClamp);
+        const char *tmname = ToolUtils::tilemode_name(SkTileMode::kClamp);
         fName.printf("gradient_%s_%s", gGrads[gradType].fName, tmname);
         fName.append(data.fName);
 

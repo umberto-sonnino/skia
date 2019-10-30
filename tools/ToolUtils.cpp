@@ -5,29 +5,29 @@
  * found in the LICENSE file.
  */
 
-#include "ToolUtils.h"
-#include "CommandLineFlags.h"
-#include "SkBitmap.h"
-#include "SkBlendMode.h"
-#include "SkCanvas.h"
-#include "SkColorData.h"
-#include "SkColorPriv.h"
-#include "SkFloatingPoint.h"
-#include "SkFontMgrPriv.h"
-#include "SkFontPriv.h"
-#include "SkImage.h"
-#include "SkMatrix.h"
-#include "SkPaint.h"
-#include "SkPath.h"
-#include "SkPixelRef.h"
-#include "SkPixmap.h"
-#include "SkPoint3.h"
-#include "SkRRect.h"
-#include "SkShader.h"
-#include "SkSurface.h"
-#include "SkTextBlob.h"
-#include "SkTypeface_win.h"
-#include "TestFontMgr.h"
+#include "include/core/SkBitmap.h"
+#include "include/core/SkBlendMode.h"
+#include "include/core/SkCanvas.h"
+#include "include/core/SkColorPriv.h"
+#include "include/core/SkImage.h"
+#include "include/core/SkMatrix.h"
+#include "include/core/SkPaint.h"
+#include "include/core/SkPath.h"
+#include "include/core/SkPixelRef.h"
+#include "include/core/SkPixmap.h"
+#include "include/core/SkPoint3.h"
+#include "include/core/SkRRect.h"
+#include "include/core/SkShader.h"
+#include "include/core/SkSurface.h"
+#include "include/core/SkTextBlob.h"
+#include "include/ports/SkTypeface_win.h"
+#include "include/private/SkColorData.h"
+#include "include/private/SkFloatingPoint.h"
+#include "src/core/SkFontMgrPriv.h"
+#include "src/core/SkFontPriv.h"
+#include "tools/ToolUtils.h"
+#include "tools/flags/CommandLineFlags.h"
+#include "tools/fonts/TestFontMgr.h"
 
 #include <cmath>
 #include <cstring>
@@ -48,19 +48,25 @@ const char* alphatype_name(SkAlphaType at) {
 
 const char* colortype_name(SkColorType ct) {
     switch (ct) {
-        case kUnknown_SkColorType:      return "Unknown";
-        case kAlpha_8_SkColorType:      return "Alpha_8";
-        case kRGB_565_SkColorType:      return "RGB_565";
-        case kARGB_4444_SkColorType:    return "ARGB_4444";
-        case kRGBA_8888_SkColorType:    return "RGBA_8888";
-        case kRGB_888x_SkColorType:     return "RGB_888x";
-        case kBGRA_8888_SkColorType:    return "BGRA_8888";
-        case kRGBA_1010102_SkColorType: return "RGBA_1010102";
-        case kRGB_101010x_SkColorType:  return "RGB_101010x";
-        case kGray_8_SkColorType:       return "Gray_8";
-        case kRGBA_F16Norm_SkColorType: return "RGBA_F16Norm";
-        case kRGBA_F16_SkColorType:     return "RGBA_F16";
-        case kRGBA_F32_SkColorType:     return "RGBA_F32";
+        case kUnknown_SkColorType:            return "Unknown";
+        case kAlpha_8_SkColorType:            return "Alpha_8";
+        case kA16_unorm_SkColorType:          return "Alpha_16";
+        case kA16_float_SkColorType:          return "A16_float";
+        case kRGB_565_SkColorType:            return "RGB_565";
+        case kARGB_4444_SkColorType:          return "ARGB_4444";
+        case kRGBA_8888_SkColorType:          return "RGBA_8888";
+        case kRGB_888x_SkColorType:           return "RGB_888x";
+        case kBGRA_8888_SkColorType:          return "BGRA_8888";
+        case kRGBA_1010102_SkColorType:       return "RGBA_1010102";
+        case kRGB_101010x_SkColorType:        return "RGB_101010x";
+        case kGray_8_SkColorType:             return "Gray_8";
+        case kRGBA_F16Norm_SkColorType:       return "RGBA_F16Norm";
+        case kRGBA_F16_SkColorType:           return "RGBA_F16";
+        case kRGBA_F32_SkColorType:           return "RGBA_F32";
+        case kR8G8_unorm_SkColorType:         return "R8G8_unorm";
+        case kR16G16_unorm_SkColorType:       return "R16G16_unorm";
+        case kR16G16_float_SkColorType:       return "R16G16_float";
+        case kR16G16B16A16_unorm_SkColorType: return "R16G16B16A16_unorm";
     }
     SkASSERT(false);
     return "unexpected colortype";
@@ -68,24 +74,40 @@ const char* colortype_name(SkColorType ct) {
 
 const char* colortype_depth(SkColorType ct) {
     switch (ct) {
-        case kUnknown_SkColorType:      return "Unknown";
-        case kAlpha_8_SkColorType:      return "A8";
-        case kRGB_565_SkColorType:      return "565";
-        case kARGB_4444_SkColorType:    return "4444";
-        case kRGBA_8888_SkColorType:    return "8888";
-        case kRGB_888x_SkColorType:     return "888";
-        case kBGRA_8888_SkColorType:    return "8888";
-        case kRGBA_1010102_SkColorType: return "1010102";
-        case kRGB_101010x_SkColorType:  return "101010";
-        case kGray_8_SkColorType:       return "G8";
-        case kRGBA_F16Norm_SkColorType: return "F16Norm";  // TODO: "F16"?
-        case kRGBA_F16_SkColorType:     return "F16";
-        case kRGBA_F32_SkColorType:     return "F32";
+        case kUnknown_SkColorType:            return "Unknown";
+        case kAlpha_8_SkColorType:            return "A8";
+        case kA16_unorm_SkColorType:          return "A16";
+        case kA16_float_SkColorType:          return "AF16";
+        case kRGB_565_SkColorType:            return "565";
+        case kARGB_4444_SkColorType:          return "4444";
+        case kRGBA_8888_SkColorType:          return "8888";
+        case kRGB_888x_SkColorType:           return "888";
+        case kBGRA_8888_SkColorType:          return "8888";
+        case kRGBA_1010102_SkColorType:       return "1010102";
+        case kRGB_101010x_SkColorType:        return "101010";
+        case kGray_8_SkColorType:             return "G8";
+        case kRGBA_F16Norm_SkColorType:       return "F16Norm";  // TODO: "F16"?
+        case kRGBA_F16_SkColorType:           return "F16";
+        case kRGBA_F32_SkColorType:           return "F32";
+        case kR8G8_unorm_SkColorType:         return "88";
+        case kR16G16_unorm_SkColorType:       return "1616";
+        case kR16G16_float_SkColorType:       return "F16F16";
+        case kR16G16B16A16_unorm_SkColorType: return "16161616";
     }
     SkASSERT(false);
     return "unexpected colortype";
 }
 
+const char* tilemode_name(SkTileMode mode) {
+    switch (mode) {
+        case SkTileMode::kClamp:  return "clamp";
+        case SkTileMode::kRepeat: return "repeat";
+        case SkTileMode::kMirror: return "mirror";
+        case SkTileMode::kDecal:  return "decal";
+    }
+    SkASSERT(false);
+    return "unexpected tilemode";
+}
 
 SkColor color_to_565(SkColor color) {
     // Not a good idea to use this function for greyscale colors...
@@ -137,7 +159,7 @@ create_string_bitmap(int w, int h, SkColor c, int x, int y, int textSize, const 
     canvas.clear(0x00000000);
     canvas.drawSimpleText(str,
                           strlen(str),
-                          kUTF8_SkTextEncoding,
+                          SkTextEncoding::kUTF8,
                           SkIntToScalar(x),
                           SkIntToScalar(y),
                           font,
@@ -168,7 +190,7 @@ void add_to_text_blob(SkTextBlobBuilder* builder,
                       const SkFont&      font,
                       SkScalar           x,
                       SkScalar           y) {
-    add_to_text_blob_w_len(builder, text, strlen(text), kUTF8_SkTextEncoding, font, x, y);
+    add_to_text_blob_w_len(builder, text, strlen(text), SkTextEncoding::kUTF8, font, x, y);
 }
 
 void get_text_path(const SkFont&  font,

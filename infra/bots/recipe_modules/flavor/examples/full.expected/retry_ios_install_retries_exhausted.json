@@ -22,8 +22,7 @@
       "PATH": "<PATH>:RECIPE_REPO[depot_tools]"
     },
     "infra_step": true,
-    "name": "cat_file file.txt",
-    "stdout": "/path/to/tmp/"
+    "name": "cat_file file.txt"
   },
   {
     "cmd": [
@@ -39,7 +38,7 @@
   },
   {
     "cmd": [
-      "python",
+      "vpython",
       "-u",
       "RECIPE_MODULE[recipe_engine::file]/resources/fileutil.py",
       "--json-output",
@@ -52,7 +51,7 @@
   },
   {
     "cmd": [
-      "python",
+      "vpython",
       "-u",
       "RECIPE_MODULE[recipe_engine::file]/resources/fileutil.py",
       "--json-output",
@@ -147,12 +146,7 @@
   },
   {
     "failure": {
-      "exception": {
-        "traceback": [
-          "<omitted by recipe engine>"
-        ]
-      },
-      "humanReason": "Infra Failure: Step('install_dm (attempt 2)') returned 1"
+      "humanReason": "Infra Failure: Step('install_dm (attempt 2)') (retcode: 1)"
     },
     "name": "$result"
   }

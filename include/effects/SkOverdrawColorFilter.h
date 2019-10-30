@@ -5,8 +5,8 @@
  * found in the LICENSE file.
  */
 
-#include "SkColorFilter.h"
-#include "SkFlattenable.h"
+#include "include/core/SkColorFilter.h"
+#include "include/core/SkFlattenable.h"
 
 #ifndef SkOverdrawColorFilter_DEFINED
 #define SkOverdrawColorFilter_DEFINED
@@ -28,8 +28,8 @@ public:
     }
 
 #if SK_SUPPORT_GPU
-    std::unique_ptr<GrFragmentProcessor> asFragmentProcessor(
-            GrRecordingContext*, const GrColorSpaceInfo&) const override;
+    std::unique_ptr<GrFragmentProcessor> asFragmentProcessor(GrRecordingContext*,
+                                                             const GrColorInfo&) const override;
 #endif
 
     static void RegisterFlattenables();

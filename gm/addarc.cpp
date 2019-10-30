@@ -5,12 +5,22 @@
  * found in the LICENSE file.
  */
 
-#include "AnimTimer.h"
-#include "SkCanvas.h"
-#include "SkPathMeasure.h"
-#include "SkRandom.h"
-#include "ToolUtils.h"
-#include "gm.h"
+#include "gm/gm.h"
+#include "include/core/SkCanvas.h"
+#include "include/core/SkColor.h"
+#include "include/core/SkPaint.h"
+#include "include/core/SkPath.h"
+#include "include/core/SkPathMeasure.h"
+#include "include/core/SkPoint.h"
+#include "include/core/SkRect.h"
+#include "include/core/SkScalar.h"
+#include "include/core/SkSize.h"
+#include "include/core/SkString.h"
+#include "include/core/SkTypes.h"
+#include "include/private/SkFloatingPoint.h"
+#include "include/utils/SkRandom.h"
+#include "tools/ToolUtils.h"
+#include "tools/timer/TimeUtils.h"
 
 class AddArcGM : public skiagm::GM {
 public:
@@ -52,8 +62,8 @@ protected:
         }
     }
 
-    bool onAnimate(const AnimTimer& timer) override {
-        fRotate = timer.scaled(1, 360);
+    bool onAnimate(double nanos) override {
+        fRotate = TimeUtils::Scaled(1e-9 * nanos, 1, 360);
         return true;
     }
 
@@ -138,8 +148,8 @@ protected:
         }
     }
 
-    bool onAnimate(const AnimTimer& timer) override {
-        fRotate = timer.scaled(60, 360);
+    bool onAnimate(double nanos) override {
+        fRotate = TimeUtils::Scaled(1e-9 * nanos, 60, 360);
         return true;
     }
 
@@ -191,8 +201,8 @@ protected:
         }
     }
 
-    bool onAnimate(const AnimTimer& timer) override {
-        fRotate = timer.scaled(60, 360);
+    bool onAnimate(double nanos) override {
+        fRotate = TimeUtils::Scaled(1e-9 * nanos, 60, 360);
         return true;
     }
 

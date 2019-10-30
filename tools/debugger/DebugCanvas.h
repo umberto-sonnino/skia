@@ -8,15 +8,15 @@
 #ifndef SKDEBUGCANVAS_H_
 #define SKDEBUGCANVAS_H_
 
-#include "DrawCommand.h"
-#include "SkCanvas.h"
-#include "SkCanvasVirtualEnforcer.h"
-#include "SkPath.h"
-#include "SkPathOps.h"
-#include "SkString.h"
-#include "SkTArray.h"
-#include "SkVertices.h"
-#include "UrlDataManager.h"
+#include "include/core/SkCanvas.h"
+#include "include/core/SkCanvasVirtualEnforcer.h"
+#include "include/core/SkPath.h"
+#include "include/core/SkString.h"
+#include "include/core/SkVertices.h"
+#include "include/pathops/SkPathOps.h"
+#include "include/private/SkTArray.h"
+#include "tools/UrlDataManager.h"
+#include "tools/debugger/DrawCommand.h"
 
 class GrAuditTrail;
 class SkNWayCanvas;
@@ -100,7 +100,7 @@ public:
      */
     void toJSON(SkJSONWriter& writer, UrlDataManager& urlDataManager, int n, SkCanvas*);
 
-    void toJSONOpList(SkJSONWriter& writer, int n, SkCanvas*);
+    void toJSONOpsTask(SkJSONWriter& writer, int n, SkCanvas*);
 
     void detachCommands(SkTDArray<DrawCommand*>* dst) { fCommandVector.swap(*dst); }
 
@@ -127,6 +127,7 @@ protected:
                      SkBlendMode,
                      const SkPaint& paint) override;
     void onDrawPaint(const SkPaint&) override;
+    void onDrawBehind(const SkPaint&) override;
 
     void onDrawRect(const SkRect&, const SkPaint&) override;
     void onDrawOval(const SkRect&, const SkPaint&) override;
@@ -188,7 +189,7 @@ protected:
     void onDrawEdgeAAQuad(const SkRect&,
                           const SkPoint[4],
                           QuadAAFlags,
-                          SkColor,
+                          const SkColor4f&,
                           SkBlendMode) override;
     void onDrawEdgeAAImageSet(const ImageSetEntry[],
                               int count,

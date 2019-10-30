@@ -5,21 +5,18 @@
  * found in the LICENSE file.
  */
 
-#include "GrRegionOp.h"
+#include "src/gpu/ops/GrRegionOp.h"
 
-#include "GrCaps.h"
-#include "GrDefaultGeoProcFactory.h"
-#include "GrDrawOpTest.h"
-#include "GrMeshDrawOp.h"
-#include "GrOpFlushState.h"
-#include "GrResourceProvider.h"
-#include "GrSimpleMeshDrawOpHelper.h"
-#include "GrVertexWriter.h"
-#include "SkMatrixPriv.h"
-#include "SkRegion.h"
-
-static const int kVertsPerInstance = 4;
-static const int kIndicesPerInstance = 6;
+#include "include/core/SkRegion.h"
+#include "src/core/SkMatrixPriv.h"
+#include "src/gpu/GrCaps.h"
+#include "src/gpu/GrDefaultGeoProcFactory.h"
+#include "src/gpu/GrDrawOpTest.h"
+#include "src/gpu/GrOpFlushState.h"
+#include "src/gpu/GrResourceProvider.h"
+#include "src/gpu/GrVertexWriter.h"
+#include "src/gpu/ops/GrMeshDrawOp.h"
+#include "src/gpu/ops/GrSimpleMeshDrawOpHelper.h"
 
 static sk_sp<GrGeometryProcessor> make_gp(const GrShaderCaps* shaderCaps,
                                           const SkMatrix& viewMatrix,
@@ -61,12 +58,12 @@ public:
         info.fRegion = region;
 
         SkRect bounds = SkRect::Make(region.getBounds());
-        this->setTransformedBounds(bounds, viewMatrix, HasAABloat::kNo, IsZeroArea::kNo);
+        this->setTransformedBounds(bounds, viewMatrix, HasAABloat::kNo, IsHairline::kNo);
     }
 
     const char* name() const override { return "GrRegionOp"; }
 
-    void visitProxies(const VisitProxyFunc& func, VisitorType) const override {
+    void visitProxies(const VisitProxyFunc& func) const override {
         fHelper.visitProxies(func);
     }
 
@@ -87,11 +84,12 @@ public:
 
     FixedFunctionFlags fixedFunctionFlags() const override { return fHelper.fixedFunctionFlags(); }
 
-    GrProcessorSet::Analysis finalize(const GrCaps& caps, const GrAppliedClip* clip,
-                                      GrFSAAType fsaaType, GrClampType clampType) override {
-        return fHelper.finalizeProcessors(caps, clip, fsaaType, clampType,
-                                          GrProcessorAnalysisCoverage::kNone, &fRegions[0].fColor,
-                                          &fWideColor);
+    GrProcessorSet::Analysis finalize(
+            const GrCaps& caps, const GrAppliedClip* clip, bool hasMixedSampledCoverage,
+            GrClampType clampType) override {
+        return fHelper.finalizeProcessors(
+                caps, clip, hasMixedSampledCoverage, clampType, GrProcessorAnalysisCoverage::kNone,
+                &fRegions[0].fColor, &fWideColor);
     }
 
 private:
@@ -112,14 +110,17 @@ private:
         if (!numRects) {
             return;
         }
-        sk_sp<const GrGpuBuffer> indexBuffer = target->resourceProvider()->refQuadIndexBuffer();
+        auto indexBuffer = target->resourceProvider()->refNonAAQuadIndexBuffer();
         if (!indexBuffer) {
             SkDebugf("Could not allocate indices\n");
             return;
         }
         PatternHelper helper(target, GrPrimitiveType::kTriangles, gp->vertexStride(),
-                             std::move(indexBuffer), kVertsPerInstance, kIndicesPerInstance,
-                             numRects);
+                             std::move(indexBuffer),
+                             GrResourceProvider::NumVertsPerNonAAQuad(),
+                             GrResourceProvider::NumIndicesPerNonAAQuad(),
+                             numRects,
+                             GrResourceProvider::MaxNumNonAAQuads());
         GrVertexWriter vertices{helper.vertices()};
         if (!vertices.fPtr) {
             SkDebugf("Could not allocate vertices\n");
@@ -211,7 +212,7 @@ GR_DRAW_OP_TEST_DEFINE(RegionOp) {
     }
     SkMatrix viewMatrix = GrTest::TestMatrix(random);
     GrAAType aaType = GrAAType::kNone;
-    if (GrFSAAType::kUnifiedMSAA == fsaaType && random->nextBool()) {
+    if (numSamples > 1 && random->nextBool()) {
         aaType = GrAAType::kMSAA;
     }
     return RegionOp::Make(context, std::move(paint), viewMatrix, region, aaType,

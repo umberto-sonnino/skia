@@ -4,8 +4,10 @@
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
+#ifndef SkScalingCodec_DEFINED
+#define SkScalingCodec_DEFINED
 
-#include "SkCodec.h"
+#include "include/codec/SkCodec.h"
 
 // Helper class for an SkCodec that supports arbitrary downscaling.
 class SkScalingCodec : public SkCodec {
@@ -34,3 +36,4 @@ private:
     typedef SkCodec INHERITED;
 };
 
+#endif  // SkScalingCodec_DEFINED

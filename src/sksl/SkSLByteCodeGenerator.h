@@ -8,45 +8,47 @@
 #ifndef SKSL_BYTECODEGENERATOR
 #define SKSL_BYTECODEGENERATOR
 
+#include <algorithm>
 #include <stack>
-#include <tuple>
 #include <unordered_map>
 
-#include "SkSLByteCode.h"
-#include "SkSLCodeGenerator.h"
-#include "SkSLMemoryLayout.h"
-#include "ir/SkSLBinaryExpression.h"
-#include "ir/SkSLBoolLiteral.h"
-#include "ir/SkSLBlock.h"
-#include "ir/SkSLBreakStatement.h"
-#include "ir/SkSLConstructor.h"
-#include "ir/SkSLContinueStatement.h"
-#include "ir/SkSLDoStatement.h"
-#include "ir/SkSLExpressionStatement.h"
-#include "ir/SkSLFloatLiteral.h"
-#include "ir/SkSLIfStatement.h"
-#include "ir/SkSLIndexExpression.h"
-#include "ir/SkSLInterfaceBlock.h"
-#include "ir/SkSLIntLiteral.h"
-#include "ir/SkSLFieldAccess.h"
-#include "ir/SkSLForStatement.h"
-#include "ir/SkSLFunctionCall.h"
-#include "ir/SkSLFunctionDeclaration.h"
-#include "ir/SkSLFunctionDefinition.h"
-#include "ir/SkSLNullLiteral.h"
-#include "ir/SkSLPrefixExpression.h"
-#include "ir/SkSLPostfixExpression.h"
-#include "ir/SkSLProgramElement.h"
-#include "ir/SkSLReturnStatement.h"
-#include "ir/SkSLStatement.h"
-#include "ir/SkSLSwitchStatement.h"
-#include "ir/SkSLSwizzle.h"
-#include "ir/SkSLTernaryExpression.h"
-#include "ir/SkSLVarDeclarations.h"
-#include "ir/SkSLVarDeclarationsStatement.h"
-#include "ir/SkSLVariableReference.h"
-#include "ir/SkSLWhileStatement.h"
-#include "spirv.h"
+#include "src/sksl/SkSLByteCode.h"
+#include "src/sksl/SkSLCodeGenerator.h"
+#include "src/sksl/SkSLMemoryLayout.h"
+#include "src/sksl/ir/SkSLBinaryExpression.h"
+#include "src/sksl/ir/SkSLBlock.h"
+#include "src/sksl/ir/SkSLBoolLiteral.h"
+#include "src/sksl/ir/SkSLBreakStatement.h"
+#include "src/sksl/ir/SkSLConstructor.h"
+#include "src/sksl/ir/SkSLContinueStatement.h"
+#include "src/sksl/ir/SkSLDoStatement.h"
+#include "src/sksl/ir/SkSLExpressionStatement.h"
+#include "src/sksl/ir/SkSLExternalFunctionCall.h"
+#include "src/sksl/ir/SkSLExternalValueReference.h"
+#include "src/sksl/ir/SkSLFieldAccess.h"
+#include "src/sksl/ir/SkSLFloatLiteral.h"
+#include "src/sksl/ir/SkSLForStatement.h"
+#include "src/sksl/ir/SkSLFunctionCall.h"
+#include "src/sksl/ir/SkSLFunctionDeclaration.h"
+#include "src/sksl/ir/SkSLFunctionDefinition.h"
+#include "src/sksl/ir/SkSLIfStatement.h"
+#include "src/sksl/ir/SkSLIndexExpression.h"
+#include "src/sksl/ir/SkSLIntLiteral.h"
+#include "src/sksl/ir/SkSLInterfaceBlock.h"
+#include "src/sksl/ir/SkSLNullLiteral.h"
+#include "src/sksl/ir/SkSLPostfixExpression.h"
+#include "src/sksl/ir/SkSLPrefixExpression.h"
+#include "src/sksl/ir/SkSLProgramElement.h"
+#include "src/sksl/ir/SkSLReturnStatement.h"
+#include "src/sksl/ir/SkSLStatement.h"
+#include "src/sksl/ir/SkSLSwitchStatement.h"
+#include "src/sksl/ir/SkSLSwizzle.h"
+#include "src/sksl/ir/SkSLTernaryExpression.h"
+#include "src/sksl/ir/SkSLVarDeclarations.h"
+#include "src/sksl/ir/SkSLVarDeclarationsStatement.h"
+#include "src/sksl/ir/SkSLVariableReference.h"
+#include "src/sksl/ir/SkSLWhileStatement.h"
+#include "src/sksl/spirv.h"
 
 namespace SkSL {
 
@@ -69,17 +71,14 @@ public:
          * Stack before call: ... lvalue value
          * Stack after call: ...
          */
-        virtual void store() = 0;
+        virtual void store(bool discard) = 0;
 
     protected:
         ByteCodeGenerator& fGenerator;
     };
 
     ByteCodeGenerator(const Context* context, const Program* program, ErrorReporter* errors,
-                      ByteCode* output)
-    : INHERITED(program, errors, nullptr)
-    , fContext(*context)
-    , fOutput(output) {}
+                      ByteCode* output);
 
     bool generateCode() override;
 
@@ -89,20 +88,20 @@ public:
 
     void write32(uint32_t b);
 
-    void write(ByteCodeInstruction inst);
+    void write(ByteCodeInstruction inst, int count = kUnusedStackCount);
 
     /**
      * Based on 'type', writes the s (signed), u (unsigned), or f (float) instruction.
      */
     void writeTypedInstruction(const Type& type, ByteCodeInstruction s, ByteCodeInstruction u,
-                               ByteCodeInstruction f);
+                               ByteCodeInstruction f, int count, bool writeCount = true);
 
-    /**
-     * Pushes the storage location of an lvalue to the stack.
-     */
-    void writeTarget(const Expression& expr);
+    static int SlotCount(const Type& type);
 
 private:
+    static constexpr int kUnusedStackCount = INT32_MAX;
+    static int StackUsage(ByteCodeInstruction, int count);
+
     // reserves 16 bits in the output code, to be filled in later with an address once we determine
     // it
     class DeferredLocation {
@@ -122,8 +121,8 @@ private:
         void set() {
             int target = fGenerator.fCode->size();
             SkASSERT(target <= 65535);
-            (*fGenerator.fCode)[fOffset] = target >> 8;
-            (*fGenerator.fCode)[fOffset + 1] = target;
+            (*fGenerator.fCode)[fOffset] = target;
+            (*fGenerator.fCode)[fOffset + 1] = target >> 8;
 #ifdef SK_DEBUG
             fSet = true;
 #endif
@@ -137,20 +136,103 @@ private:
 #endif
     };
 
+    // Intrinsics which do not simply map to a single opcode
+    enum class SpecialIntrinsic {
+        kDot,
+    };
+
+    struct Intrinsic {
+        Intrinsic(ByteCodeInstruction instruction)
+            : fIsSpecial(false)
+            , fValue(instruction) {}
+
+        Intrinsic(SpecialIntrinsic special)
+            : fIsSpecial(true)
+            , fValue(special) {}
+
+        bool fIsSpecial;
+
+        union Value {
+            Value(ByteCodeInstruction instruction)
+                : fInstruction(instruction) {}
+
+            Value(SpecialIntrinsic special)
+                : fSpecial(special) {}
+
+            ByteCodeInstruction fInstruction;
+            SpecialIntrinsic fSpecial;
+        } fValue;
+    };
+
+
+    // Similar to Variable::Storage, but locals and parameters are grouped together, and globals
+    // are further subidivided into uniforms and other (writable) globals.
+    enum class Storage {
+        kLocal,    // include parameters
+        kGlobal,   // non-uniform globals
+        kUniform,  // uniform globals
+    };
+
+    struct Location {
+        int     fSlot;
+        Storage fStorage;
+
+        // Not really invalid, but a "safe" placeholder to be more explicit at call-sites
+        static Location MakeInvalid() { return { 0, Storage::kLocal }; }
+
+        Location makeOnStack() { return { -1, fStorage }; }
+        bool isOnStack() const { return fSlot < 0; }
+
+        Location operator+(int offset) {
+            SkASSERT(fSlot >= 0);
+            return { fSlot + offset, fStorage };
+        }
+
+        ByteCodeInstruction selectLoad(ByteCodeInstruction local,
+                                       ByteCodeInstruction global,
+                                       ByteCodeInstruction uniform) const {
+            switch (fStorage) {
+                case Storage::kLocal:   return local;
+                case Storage::kGlobal:  return global;
+                case Storage::kUniform: return uniform;
+            }
+            SkUNREACHABLE;
+        }
+
+        ByteCodeInstruction selectStore(ByteCodeInstruction local,
+                                        ByteCodeInstruction global) const {
+            switch (fStorage) {
+                case Storage::kLocal:   return local;
+                case Storage::kGlobal:  return global;
+                case Storage::kUniform: ABORT("Trying to store to a uniform"); break;
+            }
+            return local;
+        }
+    };
+
     /**
      * Returns the local slot into which var should be stored, allocating a new slot if it has not
      * already been assigned one. Compound variables (e.g. vectors) will consume more than one local
      * slot, with the getLocation return value indicating where the first element should be stored.
      */
-    int getLocation(const Variable& var);
+    Location getLocation(const Variable& var);
+
+    /**
+     * As above, but computes the (possibly dynamic) address of an expression involving indexing &
+     * field access. If the address is known, it's returned. If not, -1 is returned, and the
+     * location will be left on the top of the stack.
+     */
+    Location getLocation(const Expression& expr);
+
+    void gatherUniforms(const Type& type, const String& name);
 
     std::unique_ptr<ByteCodeFunction> writeFunction(const FunctionDefinition& f);
 
     void writeVarDeclarations(const VarDeclarations& decl);
 
-    void writeVariableReference(const VariableReference& ref);
+    void writeVariableExpression(const Expression& expr);
 
-    void writeExpression(const Expression& expr);
+    void writeExpression(const Expression& expr, bool discard = false);
 
     /**
      * Pushes whatever values are required by the lvalue onto the stack, and returns an LValue
@@ -158,29 +240,27 @@ private:
      */
     std::unique_ptr<LValue> getLValue(const Expression& expr);
 
+    void writeIntrinsicCall(const FunctionCall& c);
+
     void writeFunctionCall(const FunctionCall& c);
 
     void writeConstructor(const Constructor& c);
 
-    void writeFieldAccess(const FieldAccess& f);
+    void writeExternalFunctionCall(const ExternalFunctionCall& c);
+
+    void writeExternalValue(const ExternalValueReference& r);
 
     void writeSwizzle(const Swizzle& swizzle);
 
-    void writeBinaryExpression(const BinaryExpression& b);
+    bool writeBinaryExpression(const BinaryExpression& b, bool discard);
 
     void writeTernaryExpression(const TernaryExpression& t);
 
-    void writeIndexExpression(const IndexExpression& expr);
-
-    void writeLogicalAnd(const BinaryExpression& b);
-
-    void writeLogicalOr(const BinaryExpression& o);
-
     void writeNullLiteral(const NullLiteral& n);
 
-    void writePrefixExpression(const PrefixExpression& p);
+    bool writePrefixExpression(const PrefixExpression& p, bool discard);
 
-    void writePostfixExpression(const PostfixExpression& p);
+    bool writePostfixExpression(const PostfixExpression& p, bool discard);
 
     void writeBoolLiteral(const BoolLiteral& b);
 
@@ -214,6 +294,26 @@ private:
     // updates the current set of continues to branch to the current location
     void setContinueTargets();
 
+    void enterLoop() {
+        fLoopCount++;
+        fMaxLoopCount = std::max(fMaxLoopCount, fLoopCount);
+    }
+
+    void exitLoop() {
+        SkASSERT(fLoopCount > 0);
+        fLoopCount--;
+    }
+
+    void enterCondition() {
+        fConditionCount++;
+        fMaxConditionCount = std::max(fMaxConditionCount, fConditionCount);
+    }
+
+    void exitCondition() {
+        SkASSERT(fConditionCount > 0);
+        fConditionCount--;
+    }
+
     const Context& fContext;
 
     ByteCode* fOutput;
@@ -228,10 +328,22 @@ private:
 
     std::stack<std::vector<DeferredLocation>> fBreakTargets;
 
+    std::vector<const FunctionDefinition*> fFunctions;
+
     int fParameterCount;
+    int fStackCount;
+    int fMaxStackCount;
+
+    int fLoopCount;
+    int fMaxLoopCount;
+    int fConditionCount;
+    int fMaxConditionCount;
+
+    const std::unordered_map<String, Intrinsic> fIntrinsics;
 
     friend class DeferredLocation;
-    friend class ByteCodeVariableLValue;
+    friend class ByteCodeExpressionLValue;
+    friend class ByteCodeSwizzleLValue;
 
     typedef CodeGenerator INHERITED;
 };

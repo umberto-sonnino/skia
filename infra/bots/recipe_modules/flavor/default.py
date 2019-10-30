@@ -22,6 +22,7 @@ class DeviceDirs(object):
                lotties_dir,
                skp_dir,
                svg_dir,
+               mskp_dir,
                tmp_dir):
     self._bin_dir = bin_dir
     self._dm_dir = dm_dir
@@ -31,6 +32,7 @@ class DeviceDirs(object):
     self._lotties_dir = lotties_dir
     self._skp_dir = skp_dir
     self._svg_dir = svg_dir
+    self._mskp_dir = mskp_dir
     self._tmp_dir = tmp_dir
 
   @property
@@ -68,6 +70,10 @@ class DeviceDirs(object):
     return self._svg_dir
 
   @property
+  def mskp_dir(self):
+    return self._mskp_dir
+
+  @property
   def tmp_dir(self):
     return self._tmp_dir
 
@@ -92,6 +98,7 @@ class DefaultFlavor(object):
         lotties_dir=self.m.path['start_dir'].join('lottie-samples'),
         skp_dir=self.m.path['start_dir'].join('skp'),
         svg_dir=self.m.path['start_dir'].join('svg'),
+        mskp_dir=self.m.path['start_dir'].join('mskp'),
         tmp_dir=self.m.vars.tmp_dir)
     self.host_dirs = self.device_dirs
 
@@ -257,9 +264,11 @@ class DefaultFlavor(object):
                                                   profname)
 
     if path:
-      env['PATH'] = '%%(PATH)s:%s' % ':'.join('%s' % p for p in path)
+      env['PATH'] = self.m.path.pathsep.join(
+          ['%(PATH)s'] + ['%s' % p for p in path])
     if ld_library_path:
-      env['LD_LIBRARY_PATH'] = ':'.join('%s' % p for p in ld_library_path)
+      env['LD_LIBRARY_PATH'] = self.m.path.pathsep.join(
+          '%s' % p for p in ld_library_path)
 
     to_symbolize = ['dm', 'nanobench']
     if name in to_symbolize and self.m.vars.is_linux:
@@ -271,7 +280,12 @@ class DefaultFlavor(object):
                  self.module.resource('symbolize_stack_trace.py'),
                  args=args,
                  infra_step=False)
-
+    elif 'Win' in self.m.vars.builder_cfg.get('os', ''):
+      with self.m.context(env=env):
+        wrapped_cmd = ['powershell', '-ExecutionPolicy', 'Unrestricted',
+                       '-File',
+                       self.module.resource('win_run_and_check_log.ps1')] + cmd
+        self._run(name, wrapped_cmd)
     else:
       with self.m.context(env=env):
         self._run(name, cmd)

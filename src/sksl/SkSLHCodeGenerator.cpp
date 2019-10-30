@@ -5,15 +5,15 @@
  * found in the LICENSE file.
  */
 
-#include "SkSLHCodeGenerator.h"
+#include "src/sksl/SkSLHCodeGenerator.h"
 
-#include "SkSLParser.h"
-#include "SkSLUtil.h"
-#include "ir/SkSLEnum.h"
-#include "ir/SkSLFunctionDeclaration.h"
-#include "ir/SkSLFunctionDefinition.h"
-#include "ir/SkSLSection.h"
-#include "ir/SkSLVarDeclarations.h"
+#include "src/sksl/SkSLParser.h"
+#include "src/sksl/SkSLUtil.h"
+#include "src/sksl/ir/SkSLEnum.h"
+#include "src/sksl/ir/SkSLFunctionDeclaration.h"
+#include "src/sksl/ir/SkSLFunctionDefinition.h"
+#include "src/sksl/ir/SkSLSection.h"
+#include "src/sksl/ir/SkSLVarDeclarations.h"
 
 #include <set>
 
@@ -25,7 +25,7 @@ HCodeGenerator::HCodeGenerator(const Context* context, const Program* program,
 , fContext(*context)
 , fName(std::move(name))
 , fFullName(String::printf("Gr%s", fName.c_str()))
-, fSectionAndParameterHelper(*program, *errors) {}
+, fSectionAndParameterHelper(program, *errors) {}
 
 String HCodeGenerator::ParameterType(const Context& context, const Type& type,
                                      const Layout& layout) {
@@ -281,6 +281,10 @@ void HCodeGenerator::writeConstructor() {
             }
             this->writef("            %s_index = this->numChildProcessors();",
                          FieldName(String(param->fName).c_str()).c_str());
+            if (fSectionAndParameterHelper.hasCoordOverrides(*param)) {
+                this->writef("            %s->setComputeLocalCoordsInVertexShader(false);",
+                             String(param->fName).c_str());
+            }
             this->writef("            this->registerChildProcessor(std::move(%s));",
                          String(param->fName).c_str());
             if (param->fType.kind() == Type::kNullable_Kind) {
@@ -342,10 +346,11 @@ bool HCodeGenerator::generateCode() {
                  "#define %s_DEFINED\n",
                  fFullName.c_str(),
                  fFullName.c_str());
-    this->writef("#include \"SkTypes.h\"\n");
+    this->writef("#include \"include/core/SkTypes.h\"\n");
     this->writeSection(HEADER_SECTION);
-    this->writef("#include \"GrFragmentProcessor.h\"\n"
-                 "#include \"GrCoordTransform.h\"\n");
+    this->writef("\n"
+                 "#include \"src/gpu/GrCoordTransform.h\"\n"
+                 "#include \"src/gpu/GrFragmentProcessor.h\"\n");
     this->writef("class %s : public GrFragmentProcessor {\n"
                  "public:\n",
                  fFullName.c_str());

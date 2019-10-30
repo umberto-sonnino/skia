@@ -5,21 +5,35 @@
  * found in the LICENSE file.
  */
 
-#include "SkCanvas.h"
-#include "SkColorFilter.h"
-#include "SkColorPriv.h"
-#include "SkImageFilterPriv.h"
-#include "SkShader.h"
-#include "SkTextUtils.h"
-#include "ToolUtils.h"
-#include "gm.h"
+#include "gm/gm.h"
+#include "include/core/SkBitmap.h"
+#include "include/core/SkBlendMode.h"
+#include "include/core/SkCanvas.h"
+#include "include/core/SkColor.h"
+#include "include/core/SkColorFilter.h"
+#include "include/core/SkFlattenable.h"
+#include "include/core/SkFont.h"
+#include "include/core/SkImageFilter.h"
+#include "include/core/SkPaint.h"
+#include "include/core/SkPoint.h"
+#include "include/core/SkRect.h"
+#include "include/core/SkRefCnt.h"
+#include "include/core/SkScalar.h"
+#include "include/core/SkSize.h"
+#include "include/core/SkString.h"
+#include "include/core/SkTypeface.h"
+#include "include/core/SkTypes.h"
+#include "include/effects/SkImageFilters.h"
+#include "include/utils/SkTextUtils.h"
+#include "src/core/SkImageFilter_Base.h"
+#include "src/core/SkSpecialImage.h"
+#include "tools/ToolUtils.h"
 
-#include "SkBlurImageFilter.h"
-#include "SkColorFilterImageFilter.h"
-#include "SkDropShadowImageFilter.h"
-#include "SkSpecialImage.h"
+#include <utility>
 
-class FailImageFilter : public SkImageFilter {
+class SkReadBuffer;
+
+class FailImageFilter : public SkImageFilter_Base {
 public:
     static sk_sp<SkImageFilter> Make() {
         return sk_sp<SkImageFilter>(new FailImageFilter);
@@ -29,14 +43,13 @@ public:
 protected:
     FailImageFilter() : INHERITED(nullptr, 0, nullptr) {}
 
-    sk_sp<SkSpecialImage> onFilterImage(SkSpecialImage* source, const Context&,
-                                        SkIPoint* offset) const override {
+    sk_sp<SkSpecialImage> onFilterImage(const Context&, SkIPoint* offset) const override {
         return nullptr;
     }
 
 private:
 
-    typedef SkImageFilter INHERITED;
+    typedef SkImageFilter_Base INHERITED;
 };
 
 sk_sp<SkFlattenable> FailImageFilter::CreateProc(SkReadBuffer& buffer) {
@@ -44,7 +57,7 @@ sk_sp<SkFlattenable> FailImageFilter::CreateProc(SkReadBuffer& buffer) {
     return FailImageFilter::Make();
 }
 
-class IdentityImageFilter : public SkImageFilter {
+class IdentityImageFilter : public SkImageFilter_Base {
 public:
     static sk_sp<SkImageFilter> Make(sk_sp<SkImageFilter> input) {
         return sk_sp<SkImageFilter>(new IdentityImageFilter(std::move(input)));
@@ -53,16 +66,15 @@ public:
 
     SK_FLATTENABLE_HOOKS(IdentityImageFilter)
 protected:
-    sk_sp<SkSpecialImage> onFilterImage(SkSpecialImage* source, const Context&,
-                                        SkIPoint* offset) const override {
+    sk_sp<SkSpecialImage> onFilterImage(const Context& ctx, SkIPoint* offset) const override {
         offset->set(0, 0);
-        return sk_ref_sp<SkSpecialImage>(source);
+        return sk_ref_sp<SkSpecialImage>(ctx.sourceImage());
     }
 
 private:
     IdentityImageFilter(sk_sp<SkImageFilter> input) : INHERITED(&input, 1, nullptr) {}
 
-    typedef SkImageFilter INHERITED;
+    typedef SkImageFilter_Base INHERITED;
 };
 
 // Register these image filters as deserializable before main().
@@ -174,15 +186,12 @@ protected:
             nullptr,
             IdentityImageFilter::Make(nullptr),
             FailImageFilter::Make(),
-            SkColorFilterImageFilter::Make(std::move(cf), nullptr),
-            // The strage 0.29 value tickles an edge case where crop rect calculates
-            // a small border, but the blur really needs no border. This tickels
+            SkImageFilters::ColorFilter(std::move(cf), nullptr),
+            // The strange 0.29 value tickles an edge case where crop rect calculates
+            // a small border, but the blur really needs no border. This tickles
             // an msan uninitialized value bug.
-            SkBlurImageFilter::Make(12.0f, 0.29f, nullptr),
-            SkDropShadowImageFilter::Make(
-                                    10.0f, 5.0f, 3.0f, 3.0f, SK_ColorBLUE,
-                                    SkDropShadowImageFilter::kDrawShadowAndForeground_ShadowMode,
-                                    nullptr),
+            SkImageFilters::Blur(12.0f, 0.29f, nullptr),
+            SkImageFilters::DropShadow(10.0f, 5.0f, 3.0f, 3.0f, SK_ColorBLUE, nullptr),
         };
 
         SkRect r = SkRect::MakeWH(SkIntToScalar(64), SkIntToScalar(64));
@@ -284,7 +293,7 @@ public:
     ImageFiltersText_IF() : ImageFiltersTextBaseGM("image") {}
 
     void installFilter(SkPaint* paint) override {
-        paint->setImageFilter(SkBlurImageFilter::Make(1.5f, 1.5f, nullptr));
+        paint->setImageFilter(SkImageFilters::Blur(1.5f, 1.5f, nullptr));
     }
 };
 DEF_GM( return new ImageFiltersText_IF; )

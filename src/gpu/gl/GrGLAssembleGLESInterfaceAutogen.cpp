@@ -9,9 +9,9 @@
  * be overwritten.
  */
 
-#include "gl/GrGLAssembleInterface.h"
-#include "gl/GrGLAssembleHelpers.h"
-#include "gl/GrGLUtil.h"
+#include "include/gpu/gl/GrGLAssembleHelpers.h"
+#include "include/gpu/gl/GrGLAssembleInterface.h"
+#include "src/gpu/gl/GrGLUtil.h"
 
 #define GET_PROC(F) functions->f##F = (GrGL##F##Fn*)get(ctx, "gl" #F)
 #define GET_PROC_SUFFIX(F, S) functions->f##F = (GrGL##F##Fn*)get(ctx, "gl" #F #S)
@@ -242,6 +242,11 @@ sk_sp<const GrGLInterface> GrGLMakeAssembledGLESInterface(void *ctx, GrGLGetProc
         GET_PROC_SUFFIX(DiscardFramebuffer, EXT);
     }
 
+    if (extensions.has("GL_QCOM_tiled_rendering")) {
+        GET_PROC_SUFFIX(EndTiling, QCOM);
+        GET_PROC_SUFFIX(StartTiling, QCOM);
+    }
+
     if (glVer >= GR_GL_VER(3,0)) {
         GET_PROC(VertexAttribDivisor);
     } else if (extensions.has("GL_EXT_instanced_arrays")) {
@@ -416,14 +421,6 @@ sk_sp<const GrGLInterface> GrGLMakeAssembledGLESInterface(void *ctx, GrGLGetProc
         GET_PROC_SUFFIX(WindowRectangles, EXT);
     }
 
-    if (extensions.has("EGL_KHR_image")) {
-        GET_EGL_PROC_SUFFIX(CreateImage, KHR);
-        GET_EGL_PROC_SUFFIX(DestroyImage, KHR);
-    } else if (extensions.has("EGL_KHR_image_base")) {
-        GET_EGL_PROC_SUFFIX(CreateImage, KHR);
-        GET_EGL_PROC_SUFFIX(DestroyImage, KHR);
-    }
-
     if (glVer >= GR_GL_VER(3,0)) {
         GET_PROC(ClientWaitSync);
         GET_PROC(DeleteSync);
@@ -445,6 +442,12 @@ sk_sp<const GrGLInterface> GrGLMakeAssembledGLESInterface(void *ctx, GrGLGetProc
     if (glVer >= GR_GL_VER(3,0)) {
         GET_PROC(GetProgramBinary);
         GET_PROC(ProgramBinary);
+    } else if (extensions.has("GL_OES_get_program_binary")) {
+        GET_PROC_SUFFIX(GetProgramBinary, OES);
+        GET_PROC_SUFFIX(ProgramBinary, OES);
+    }
+
+    if (glVer >= GR_GL_VER(3,0)) {
         GET_PROC(ProgramParameteri);
     }
 
@@ -501,6 +504,6 @@ sk_sp<const GrGLInterface> GrGLMakeAssembledGLESInterface(void *ctx, GrGLGetProc
     interface->fStandard = kGLES_GrGLStandard;
     interface->fExtensions.swap(&extensions);
 
-    return std::move(interface);
+    return interface;
 }
 #endif

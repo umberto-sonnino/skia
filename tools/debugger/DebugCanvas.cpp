@@ -5,20 +5,20 @@
  * found in the LICENSE file.
  */
 
-#include "DebugCanvas.h"
-#include "DrawCommand.h"
-#include "SkCanvasPriv.h"
-#include "SkClipOpPriv.h"
-#include "SkJSONWriter.h"
-#include "SkPaintFilterCanvas.h"
-#include "SkPicture.h"
-#include "SkRectPriv.h"
-#include "SkTextBlob.h"
+#include "include/core/SkPicture.h"
+#include "include/core/SkTextBlob.h"
+#include "include/utils/SkPaintFilterCanvas.h"
+#include "src/core/SkCanvasPriv.h"
+#include "src/core/SkClipOpPriv.h"
+#include "src/core/SkRectPriv.h"
+#include "src/utils/SkJSONWriter.h"
+#include "tools/debugger/DebugCanvas.h"
+#include "tools/debugger/DrawCommand.h"
 
-#include "GrAuditTrail.h"
-#include "GrContext.h"
-#include "GrContextPriv.h"
-#include "GrRenderTargetContext.h"
+#include "include/gpu/GrContext.h"
+#include "src/gpu/GrAuditTrail.h"
+#include "src/gpu/GrContextPriv.h"
+#include "src/gpu/GrRenderTargetContext.h"
 
 #define SKDEBUGCANVAS_VERSION 1
 #define SKDEBUGCANVAS_ATTRIBUTE_VERSION "version"
@@ -172,7 +172,7 @@ void DebugCanvas::drawTo(SkCanvas* originalCanvas, int index, int m) {
             at->getBoundsByClientID(&childrenBounds, index);
         } else {
             // the client wants us to draw the mth op
-            at->getBoundsByOpListID(&childrenBounds.push_back(), m);
+            at->getBoundsByOpsTaskID(&childrenBounds.push_back(), m);
         }
         SkPaint paint;
         paint.setStyle(SkPaint::kStroke_Style);
@@ -270,12 +270,12 @@ void DebugCanvas::toJSON(SkJSONWriter&   writer,
     this->cleanupAuditTrail(canvas);
 }
 
-void DebugCanvas::toJSONOpList(SkJSONWriter& writer, int n, SkCanvas* canvas) {
+void DebugCanvas::toJSONOpsTask(SkJSONWriter& writer, int n, SkCanvas* canvas) {
     this->drawAndCollectOps(n, canvas);
 
     GrAuditTrail* at = this->getAuditTrail(canvas);
     if (at) {
-        GrAuditTrail::AutoManageOpList enable(at);
+        GrAuditTrail::AutoManageOpsTask enable(at);
         at->toJson(writer);
     } else {
         writer.beginObject();
@@ -386,6 +386,10 @@ void DebugCanvas::onDrawPaint(const SkPaint& paint) {
     this->addDrawCommand(new DrawPaintCommand(paint));
 }
 
+void DebugCanvas::onDrawBehind(const SkPaint& paint) {
+    this->addDrawCommand(new DrawBehindCommand(paint));
+}
+
 void DebugCanvas::onDrawPath(const SkPath& path, const SkPaint& paint) {
     this->addDrawCommand(new DrawPathCommand(path, paint));
 }
@@ -469,11 +473,11 @@ void DebugCanvas::onDrawDrawable(SkDrawable* drawable, const SkMatrix* matrix) {
     this->addDrawCommand(new DrawDrawableCommand(drawable, matrix));
 }
 
-void DebugCanvas::onDrawEdgeAAQuad(const SkRect& rect,
-                                   const SkPoint clip[4],
-                                   QuadAAFlags   aa,
-                                   SkColor       color,
-                                   SkBlendMode   mode) {
+void DebugCanvas::onDrawEdgeAAQuad(const SkRect&    rect,
+                                   const SkPoint    clip[4],
+                                   QuadAAFlags      aa,
+                                   const SkColor4f& color,
+                                   SkBlendMode      mode) {
     this->addDrawCommand(new DrawEdgeAAQuadCommand(rect, clip, aa, color, mode));
 }
 

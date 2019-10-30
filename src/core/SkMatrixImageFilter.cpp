@@ -5,15 +5,14 @@
  * found in the LICENSE file.
  */
 
-#include "SkMatrixImageFilter.h"
+#include "src/core/SkMatrixImageFilter.h"
 
-#include "SkCanvas.h"
-#include "SkImageFilterPriv.h"
-#include "SkReadBuffer.h"
-#include "SkSpecialImage.h"
-#include "SkSpecialSurface.h"
-#include "SkWriteBuffer.h"
-#include "SkRect.h"
+#include "include/core/SkCanvas.h"
+#include "include/core/SkRect.h"
+#include "src/core/SkReadBuffer.h"
+#include "src/core/SkSpecialImage.h"
+#include "src/core/SkSpecialSurface.h"
+#include "src/core/SkWriteBuffer.h"
 
 SkMatrixImageFilter::SkMatrixImageFilter(const SkMatrix& transform,
                                          SkFilterQuality filterQuality,
@@ -45,12 +44,11 @@ void SkMatrixImageFilter::flatten(SkWriteBuffer& buffer) const {
     buffer.writeInt(fFilterQuality);
 }
 
-sk_sp<SkSpecialImage> SkMatrixImageFilter::onFilterImage(SkSpecialImage* source,
-                                                         const Context& ctx,
+sk_sp<SkSpecialImage> SkMatrixImageFilter::onFilterImage(const Context& ctx,
                                                          SkIPoint* offset) const {
 
     SkIPoint inputOffset = SkIPoint::Make(0, 0);
-    sk_sp<SkSpecialImage> input(this->filterInput(0, source, ctx, &inputOffset));
+    sk_sp<SkSpecialImage> input(this->filterInput(0, ctx, &inputOffset));
     if (!input) {
         return nullptr;
     }
@@ -71,7 +69,7 @@ sk_sp<SkSpecialImage> SkMatrixImageFilter::onFilterImage(SkSpecialImage* source,
     SkIRect dstBounds;
     dstRect.roundOut(&dstBounds);
 
-    sk_sp<SkSpecialSurface> surf(input->makeSurface(ctx.outputProperties(), dstBounds.size()));
+    sk_sp<SkSpecialSurface> surf(ctx.makeSurface(dstBounds.size()));
     if (!surf) {
         return nullptr;
     }

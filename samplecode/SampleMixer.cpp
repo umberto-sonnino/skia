@@ -5,18 +5,18 @@
  * found in the LICENSE file.
  */
 
-#include "Sample.h"
-#include "SkCanvas.h"
-#include "SkColorFilter.h"
-#include "SkGradientShader.h"
-#include "SkImage.h"
-#include "SkPath.h"
-#include "SkRegion.h"
-#include "SkShader.h"
-#include "SkUtils.h"
-#include "Resources.h"
+#include "include/core/SkCanvas.h"
+#include "include/core/SkColorFilter.h"
+#include "include/core/SkImage.h"
+#include "include/core/SkPath.h"
+#include "include/core/SkRegion.h"
+#include "include/core/SkShader.h"
+#include "include/effects/SkGradientShader.h"
+#include "samplecode/Sample.h"
+#include "src/core/SkUtils.h"
+#include "tools/Resources.h"
 
-const SkScalar gMat[] = {
+const float gMat[] = {
     .3f, .6f, .1f, 0, 0,
     .3f, .6f, .1f, 0, 0,
     .3f, .6f, .1f, 0, 0,
@@ -35,13 +35,7 @@ public:
     MixerView() {}
 
 protected:
-    bool onQuery(Event* evt) override {
-        if (Sample::TitleQ(*evt)) {
-            Sample::TitleR(evt, "Mixer");
-            return true;
-        }
-        return this->INHERITED::onQuery(evt);
-    }
+    SkString name() override { return SkString("Mixer"); }
 
     void dodraw(SkCanvas* canvas, sk_sp<SkColorFilter> cf0, sk_sp<SkColorFilter> cf1, float gap) {
         SkPaint paint;
@@ -58,7 +52,7 @@ protected:
     void onDrawContent(SkCanvas* canvas) override {
         if (!fImg) {
             fImg = GetResourceAsImage("images/mandrill_256.png");
-            fCF0 = SkColorFilters::MatrixRowMajor255(gMat);
+            fCF0 = SkColorFilters::Matrix(gMat);
             fCF1 = SkColorFilters::Blend(0xFF44CC88, SkBlendMode::kScreen);
         }
 
@@ -77,14 +71,14 @@ protected:
         }
     }
 
-    virtual Click* onFindClickHandler(SkScalar x, SkScalar y, unsigned) override {
+    virtual Click* onFindClickHandler(SkScalar x, SkScalar y, skui::ModifierKey) override {
         return fRect.contains(SkScalarRoundToInt(x),
-                              SkScalarRoundToInt(y)) ? new Click(this) : nullptr;
+                              SkScalarRoundToInt(y)) ? new Click() : nullptr;
     }
 
     bool onClick(Click* click) override {
-        fRect.offset(click->fICurr.fX - click->fIPrev.fX,
-                     click->fICurr.fY - click->fIPrev.fY);
+        fRect.offset(click->fCurr.fX - click->fPrev.fX,
+                     click->fCurr.fY - click->fPrev.fY);
         return true;
     }
 
@@ -97,8 +91,8 @@ DEF_SAMPLE( return new MixerView; )
 
 //////////////////////////////////////////////////////////////////////////////
 
-#include "SkMaskFilter.h"
-#include "SkSurface.h"
+#include "include/core/SkMaskFilter.h"
+#include "include/core/SkSurface.h"
 
 static sk_sp<SkShader> make_resource_shader(const char path[], int size) {
     auto img = GetResourceAsImage(path);
@@ -131,13 +125,7 @@ public:
     }
 
 protected:
-    bool onQuery(Event* evt) override {
-        if (Sample::TitleQ(*evt)) {
-            Sample::TitleR(evt, "ShaderMixer");
-            return true;
-        }
-        return this->INHERITED::onQuery(evt);
-    }
+    SkString name() override { return SkString("ShaderMixer"); }
 
     void onDrawContent(SkCanvas* canvas) override {
         if (!fSurface) {
@@ -166,10 +154,10 @@ protected:
         canvas->restore();
     }
 
-    virtual Click* onFindClickHandler(SkScalar x, SkScalar y, unsigned) override {
+    virtual Click* onFindClickHandler(SkScalar x, SkScalar y, skui::ModifierKey) override {
         fMode = (fMode == SkBlendMode::kSrcOver) ? SkBlendMode::kClear : SkBlendMode::kSrcOver;
         return fRect.contains(SkScalarRoundToInt(x),
-                              SkScalarRoundToInt(y)) ? new Click(this) : nullptr;
+                              SkScalarRoundToInt(y)) ? new Click() : nullptr;
     }
 
     bool onClick(Click* click) override {

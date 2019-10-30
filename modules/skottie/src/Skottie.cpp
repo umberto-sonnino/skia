@@ -5,31 +5,32 @@
  * found in the LICENSE file.
  */
 
-#include "Skottie.h"
+#include "modules/skottie/include/Skottie.h"
 
-#include "SkCanvas.h"
-#include "SkData.h"
-#include "SkFontMgr.h"
-#include "SkImage.h"
-#include "SkMakeUnique.h"
-#include "SkPaint.h"
-#include "SkPoint.h"
-#include "SkSGInvalidationController.h"
-#include "SkSGOpacityEffect.h"
-#include "SkSGPaint.h"
-#include "SkSGPath.h"
-#include "SkSGRenderEffect.h"
-#include "SkSGScene.h"
-#include "SkSGTransform.h"
-#include "SkStream.h"
-#include "SkTArray.h"
-#include "SkTo.h"
-#include "SkottieAdapter.h"
-#include "SkottieJson.h"
-#include "SkottiePriv.h"
-#include "SkottieProperty.h"
-#include "SkottieValue.h"
-#include "SkTraceEvent.h"
+#include "include/core/SkCanvas.h"
+#include "include/core/SkData.h"
+#include "include/core/SkFontMgr.h"
+#include "include/core/SkImage.h"
+#include "include/core/SkPaint.h"
+#include "include/core/SkPoint.h"
+#include "include/core/SkStream.h"
+#include "include/private/SkTArray.h"
+#include "include/private/SkTo.h"
+#include "modules/skottie/include/SkottieProperty.h"
+#include "modules/skottie/src/Composition.h"
+#include "modules/skottie/src/SkottieAdapter.h"
+#include "modules/skottie/src/SkottieJson.h"
+#include "modules/skottie/src/SkottiePriv.h"
+#include "modules/skottie/src/SkottieValue.h"
+#include "modules/skottie/src/text/TextAdapter.h"
+#include "modules/sksg/include/SkSGInvalidationController.h"
+#include "modules/sksg/include/SkSGOpacityEffect.h"
+#include "modules/sksg/include/SkSGPaint.h"
+#include "modules/sksg/include/SkSGPath.h"
+#include "modules/sksg/include/SkSGRenderEffect.h"
+#include "modules/sksg/include/SkSGScene.h"
+#include "modules/sksg/include/SkSGTransform.h"
+#include "src/core/SkTraceEvent.h"
 
 #include <chrono>
 #include <cmath>
@@ -68,7 +69,6 @@ void AnimationBuilder::log(Logger::Level lvl, const skjson::Value* json,
 }
 
 sk_sp<sksg::Transform> AnimationBuilder::attachMatrix2D(const skjson::ObjectValue& t,
-                                                        AnimatorScope* ascope,
                                                         sk_sp<sksg::Transform> parent) const {
     static const VectorValue g_default_vec_0   = {  0,   0},
                              g_default_vec_100 = {100, 100};
@@ -76,15 +76,15 @@ sk_sp<sksg::Transform> AnimationBuilder::attachMatrix2D(const skjson::ObjectValu
     auto matrix = sksg::Matrix<SkMatrix>::Make(SkMatrix::I());
     auto adapter = sk_make_sp<TransformAdapter2D>(matrix);
 
-    auto bound = this->bindProperty<VectorValue>(t["a"], ascope,
+    auto bound = this->bindProperty<VectorValue>(t["a"],
             [adapter](const VectorValue& a) {
                 adapter->setAnchorPoint(ValueTraits<VectorValue>::As<SkPoint>(a));
             }, g_default_vec_0);
-    bound |= this->bindProperty<VectorValue>(t["p"], ascope,
+    bound |= this->bindProperty<VectorValue>(t["p"],
             [adapter](const VectorValue& p) {
                 adapter->setPosition(ValueTraits<VectorValue>::As<SkPoint>(p));
             }, g_default_vec_0);
-    bound |= this->bindProperty<VectorValue>(t["s"], ascope,
+    bound |= this->bindProperty<VectorValue>(t["s"],
             [adapter](const VectorValue& s) {
                 adapter->setScale(ValueTraits<VectorValue>::As<SkVector>(s));
             }, g_default_vec_100);
@@ -95,15 +95,15 @@ sk_sp<sksg::Transform> AnimationBuilder::attachMatrix2D(const skjson::ObjectValu
         // we can still make use of rz.
         jrotation = &t["rz"];
     }
-    bound |= this->bindProperty<ScalarValue>(*jrotation, ascope,
+    bound |= this->bindProperty<ScalarValue>(*jrotation,
             [adapter](const ScalarValue& r) {
                 adapter->setRotation(r);
             }, 0.0f);
-    bound |= this->bindProperty<ScalarValue>(t["sk"], ascope,
+    bound |= this->bindProperty<ScalarValue>(t["sk"],
             [adapter](const ScalarValue& sk) {
                 adapter->setSkew(sk);
             }, 0.0f);
-    bound |= this->bindProperty<ScalarValue>(t["sa"], ascope,
+    bound |= this->bindProperty<ScalarValue>(t["sa"],
             [adapter](const ScalarValue& sa) {
                 adapter->setSkewAxis(sa);
             }, 0.0f);
@@ -116,9 +116,9 @@ sk_sp<sksg::Transform> AnimationBuilder::attachMatrix2D(const skjson::ObjectValu
 }
 
 sk_sp<sksg::Transform> AnimationBuilder::attachMatrix3D(const skjson::ObjectValue& t,
-                                                        AnimatorScope* ascope,
                                                         sk_sp<sksg::Transform> parent,
-                                                        sk_sp<TransformAdapter3D> adapter) const {
+                                                        sk_sp<TransformAdapter3D> adapter,
+                                                        bool precompose_parent) const {
     static const VectorValue g_default_vec_0   = {  0,   0,   0},
                              g_default_vec_100 = {100, 100, 100};
 
@@ -127,39 +127,39 @@ sk_sp<sksg::Transform> AnimationBuilder::attachMatrix3D(const skjson::ObjectValu
         adapter = sk_make_sp<TransformAdapter3D>();
     }
 
-    auto bound = this->bindProperty<VectorValue>(t["a"], ascope,
+    auto bound = this->bindProperty<VectorValue>(t["a"],
             [adapter](const VectorValue& a) {
                 adapter->setAnchorPoint(TransformAdapter3D::Vec3(a));
             }, g_default_vec_0);
-    bound |= this->bindProperty<VectorValue>(t["p"], ascope,
+    bound |= this->bindProperty<VectorValue>(t["p"],
             [adapter](const VectorValue& p) {
                 adapter->setPosition(TransformAdapter3D::Vec3(p));
             }, g_default_vec_0);
-    bound |= this->bindProperty<VectorValue>(t["s"], ascope,
+    bound |= this->bindProperty<VectorValue>(t["s"],
             [adapter](const VectorValue& s) {
                 adapter->setScale(TransformAdapter3D::Vec3(s));
             }, g_default_vec_100);
 
     // Orientation and rx/ry/rz are mapped to the same rotation property -- the difference is
     // in how they get interpolated (vector vs. scalar/decomposed interpolation).
-    bound |= this->bindProperty<VectorValue>(t["or"], ascope,
+    bound |= this->bindProperty<VectorValue>(t["or"],
             [adapter](const VectorValue& o) {
                 adapter->setRotation(TransformAdapter3D::Vec3(o));
             }, g_default_vec_0);
 
-    bound |= this->bindProperty<ScalarValue>(t["rx"], ascope,
+    bound |= this->bindProperty<ScalarValue>(t["rx"],
             [adapter](const ScalarValue& rx) {
                 const auto& r = adapter->getRotation();
                 adapter->setRotation(TransformAdapter3D::Vec3({rx, r.fY, r.fZ}));
             }, 0.0f);
 
-    bound |= this->bindProperty<ScalarValue>(t["ry"], ascope,
+    bound |= this->bindProperty<ScalarValue>(t["ry"],
             [adapter](const ScalarValue& ry) {
                 const auto& r = adapter->getRotation();
                 adapter->setRotation(TransformAdapter3D::Vec3({r.fX, ry, r.fZ}));
             }, 0.0f);
 
-    bound |= this->bindProperty<ScalarValue>(t["rz"], ascope,
+    bound |= this->bindProperty<ScalarValue>(t["rz"],
             [adapter](const ScalarValue& rz) {
                 const auto& r = adapter->getRotation();
                 adapter->setRotation(TransformAdapter3D::Vec3({r.fX, r.fY, rz}));
@@ -167,20 +167,23 @@ sk_sp<sksg::Transform> AnimationBuilder::attachMatrix3D(const skjson::ObjectValu
 
     // TODO: dispatch 3D transform properties
 
-    return (bound)
-        ? sksg::Transform::MakeConcat(std::move(parent), adapter->refTransform())
-        : parent;
+    if (!bound) {
+        return parent;
+    }
+
+    return precompose_parent
+        ? sksg::Transform::MakeConcat(adapter->refTransform(), std::move(parent))
+        : sksg::Transform::MakeConcat(std::move(parent), adapter->refTransform());
 }
 
 sk_sp<sksg::RenderNode> AnimationBuilder::attachOpacity(const skjson::ObjectValue& jtransform,
-                                                        AnimatorScope* ascope,
                                                         sk_sp<sksg::RenderNode> childNode) const {
     if (!childNode)
         return nullptr;
 
     auto opacityNode = sksg::OpacityEffect::Make(childNode);
 
-    const auto bound = this->bindProperty<ScalarValue>(jtransform["o"], ascope,
+    const auto bound = this->bindProperty<ScalarValue>(jtransform["o"],
         [opacityNode](const ScalarValue& o) {
             // BM opacity is [0..100]
             opacityNode->setOpacity(o * 0.01f);
@@ -212,6 +215,7 @@ static SkBlendMode GetBlendMode(const skjson::ObjectValue& jobject,
         SkBlendMode::kSaturation, // 13:'saturation'
         SkBlendMode::kColor,      // 14:'color'
         SkBlendMode::kLuminosity, // 15:'luminosity'
+        SkBlendMode::kPlus,       // 16:'add'
     };
 
     const auto bm_index = ParseDefault<size_t>(jobject["bm"], 0);
@@ -237,10 +241,9 @@ sk_sp<sksg::RenderNode> AnimationBuilder::attachBlendMode(const skjson::ObjectVa
     return child;
 }
 
-sk_sp<sksg::Path> AnimationBuilder::attachPath(const skjson::Value& jpath,
-                                               AnimatorScope* ascope) const {
+sk_sp<sksg::Path> AnimationBuilder::attachPath(const skjson::Value& jpath) const {
     auto path_node = sksg::Path::Make();
-    return this->bindProperty<ShapeValue>(jpath, ascope,
+    return this->bindProperty<ShapeValue>(jpath,
         [path_node](const ShapeValue& p) {
             // FillType is tracked in the SG node, not in keyframes -- make sure we preserve it.
             auto path = ValueTraits<ShapeValue>::As<SkPath>(p);
@@ -252,11 +255,10 @@ sk_sp<sksg::Path> AnimationBuilder::attachPath(const skjson::Value& jpath,
 }
 
 sk_sp<sksg::Color> AnimationBuilder::attachColor(const skjson::ObjectValue& jcolor,
-                                                 AnimatorScope* ascope,
                                                  const char prop_name[]) const {
     auto color_node = sksg::Color::Make(SK_ColorBLACK);
 
-    this->bindProperty<VectorValue>(jcolor[prop_name], ascope,
+    this->bindProperty<VectorValue>(jcolor[prop_name],
         [color_node](const VectorValue& c) {
             color_node->setColor(ValueTraits<VectorValue>::As<SkColor>(c));
         });
@@ -287,9 +289,10 @@ std::unique_ptr<sksg::Scene> AnimationBuilder::parse(const skjson::ObjectValue& 
     this->parseAssets(jroot["assets"]);
     this->parseFonts(jroot["fonts"], jroot["chars"]);
 
-    AnimatorScope animators;
-    auto root = this->attachComposition(jroot, &animators);
+    AutoScope ascope(this);
+    auto root = CompositionBuilder(*this, jroot).build(*this);
 
+    auto animators = ascope.release();
     fStats->fAnimatorCount = animators.size();
 
     return sksg::Scene::Make(std::move(root), std::move(animators));
@@ -364,6 +367,20 @@ bool AnimationBuilder::dispatchOpacityProperty(const sk_sp<sksg::OpacityEffect>&
     return dispatched;
 }
 
+bool AnimationBuilder::dispatchTextProperty(const sk_sp<TextAdapter>& t) const {
+    bool dispatched = false;
+
+    if (fPropertyObserver) {
+        fPropertyObserver->onTextProperty(fPropertyObserverContext,
+            [&]() {
+                dispatched = true;
+                return std::unique_ptr<TextPropertyHandle>(new TextPropertyHandle(t));
+            });
+    }
+
+    return dispatched;
+}
+
 bool AnimationBuilder::dispatchTransformProperty(const sk_sp<TransformAdapter2D>& t) const {
     bool dispatched = false;
 
@@ -392,7 +409,8 @@ sk_sp<SkData> ResourceProvider::load(const char[], const char[]) const {
     return nullptr;
 }
 
-sk_sp<ImageAsset> ResourceProvider::loadImageAsset(const char path[], const char name[]) const {
+sk_sp<ImageAsset> ResourceProvider::loadImageAsset(const char path[], const char name[],
+                                                   const char id[]) const {
     return nullptr;
 }
 
@@ -525,6 +543,7 @@ sk_sp<Animation> Animation::Builder::make(const char* data, size_t data_len) {
                                           inPoint,
                                           outPoint,
                                           duration,
+                                          fps,
                                           flags));
 }
 
@@ -536,13 +555,14 @@ sk_sp<Animation> Animation::Builder::makeFromFile(const char path[]) {
 }
 
 Animation::Animation(std::unique_ptr<sksg::Scene> scene, SkString version, const SkSize& size,
-                     SkScalar inPoint, SkScalar outPoint, SkScalar duration, uint32_t flags)
+                     double inPoint, double outPoint, double duration, double fps, uint32_t flags)
     : fScene(std::move(scene))
     , fVersion(std::move(version))
     , fSize(size)
     , fInPoint(inPoint)
     , fOutPoint(outPoint)
     , fDuration(duration)
+    , fFPS(fps)
     , fFlags(flags) {
 
     // In case the client calls render before the first tick.
@@ -550,12 +570,6 @@ Animation::Animation(std::unique_ptr<sksg::Scene> scene, SkString version, const
 }
 
 Animation::~Animation() = default;
-
-void Animation::setShowInval(bool show) {
-    if (fScene) {
-        fScene->setShowInval(show);
-    }
-}
 
 void Animation::render(SkCanvas* canvas, const SkRect* dstR) const {
     this->render(canvas, dstR, 0);
@@ -574,6 +588,8 @@ void Animation::render(SkCanvas* canvas, const SkRect* dstR, RenderFlags renderF
         canvas->concat(SkMatrix::MakeRectToRect(srcR, *dstR, SkMatrix::kCenter_ScaleToFit));
     }
 
+    canvas->clipRect(srcR);
+
     if ((fFlags & Flags::kRequiresTopLevelIsolation) &&
         !(renderFlags & RenderFlag::kSkipTopLevelIsolation)) {
         // The animation uses non-trivial blending, and needs
@@ -581,18 +597,23 @@ void Animation::render(SkCanvas* canvas, const SkRect* dstR, RenderFlags renderF
         canvas->saveLayer(srcR, nullptr);
     }
 
-    canvas->clipRect(srcR);
-
     fScene->render(canvas);
 }
 
-void Animation::seek(SkScalar t) {
+void Animation::seekFrame(double t, sksg::InvalidationController* ic) {
     TRACE_EVENT0("skottie", TRACE_FUNC);
 
     if (!fScene)
         return;
 
-    fScene->animate(fInPoint + SkTPin(t, 0.0f, 1.0f) * (fOutPoint - fInPoint));
+    // Per AE/Lottie semantics out_point is exclusive.
+    const auto kLastValidFrame = std::nextafterf(fOutPoint, fInPoint);
+
+    fScene->animate(SkTPin<float>(fInPoint + t, fInPoint, kLastValidFrame), ic);
+}
+
+void Animation::seekFrameTime(double t, sksg::InvalidationController* ic) {
+    this->seekFrame(t * fFPS, ic);
 }
 
 sk_sp<Animation> Animation::Make(const char* data, size_t length) {

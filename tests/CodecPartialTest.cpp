@@ -5,20 +5,22 @@
  * found in the LICENSE file.
  */
 
-#include "CodecPriv.h"
-#include "FakeStreams.h"
-#include "Resources.h"
-#include "SkBitmap.h"
-#include "SkCodec.h"
-#include "SkData.h"
-#include "SkImageInfo.h"
-#include "SkMakeUnique.h"
-#include "SkRefCnt.h"
-#include "SkStream.h"
-#include "SkTypes.h"
-#include "Test.h"
+#include "include/codec/SkCodec.h"
+#include "include/core/SkBitmap.h"
+#include "include/core/SkData.h"
+#include "include/core/SkImageInfo.h"
+#include "include/core/SkRefCnt.h"
+#include "include/core/SkStream.h"
+#include "include/core/SkString.h"
+#include "include/core/SkTypes.h"
+#include "src/core/SkMakeUnique.h"
+#include "tests/CodecPriv.h"
+#include "tests/FakeStreams.h"
+#include "tests/Test.h"
+#include "tools/Resources.h"
 
 #include <cstring>
+#include <initializer_list>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -99,9 +101,8 @@ static void test_partial(skiatest::Reporter* r, const char* name, const sk_sp<Sk
 
     while (true) {
         // This imitates how Chromium calls getFrameCount before resuming a decode.
-        // Without this line, the test passes. With it, it fails when skia_use_wuffs
-        // is true.
         partialCodec->getFrameCount();
+
         const SkCodec::Result result = partialCodec->incrementalDecode();
 
         if (result == SkCodec::kSuccess) {
@@ -167,6 +168,34 @@ DEF_TEST(Codec_partialWuffs, r) {
         // first frame to decode a full image.
         test_partial(r, path, file, 100, 53);
     }
+}
+
+DEF_TEST(Codec_frameCountUpdatesInIncrementalDecode, r) {
+    sk_sp<SkData> file = GetResourceAsData("images/colorTables.gif");
+    size_t fileSize = file->size();
+    REPORTER_ASSERT(r, fileSize == 2829);
+    std::unique_ptr<SkCodec> fullCodec(SkCodec::MakeFromData(file));
+    REPORTER_ASSERT(r, fullCodec->getFrameCount() == 2);
+    const SkImageInfo info = standardize_info(fullCodec.get());
+
+    static const size_t n = 1000;
+    HaltingStream* stream = new HaltingStream(file, n);
+    // Note that we cheat and hold on to a pointer to stream, though it is owned by
+    // partialCodec.
+    auto partialCodec = SkCodec::MakeFromStream(std::unique_ptr<SkStream>(stream));
+    REPORTER_ASSERT(r, partialCodec->getFrameCount() == 1);
+
+    SkBitmap bitmap;
+    bitmap.allocPixels(info);
+    REPORTER_ASSERT(r, SkCodec::kSuccess ==
+            partialCodec->startIncrementalDecode(
+                info, bitmap.getPixels(), bitmap.rowBytes()));
+    REPORTER_ASSERT(r, SkCodec::kIncompleteInput ==
+            partialCodec->incrementalDecode());
+
+    REPORTER_ASSERT(r, partialCodec->getFrameCount() == 1);
+    stream->addNewData(fileSize - n);
+    REPORTER_ASSERT(r, partialCodec->getFrameCount() == 2);
 }
 
 // Verify that when decoding an animated gif byte by byte we report the correct

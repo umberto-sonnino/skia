@@ -7,23 +7,50 @@
 
 // This test only works with the GPU backend.
 
-#include "ToolUtils.h"
-#include "gm.h"
+#include "gm/gm.h"
+#include "include/core/SkBlendMode.h"
+#include "include/core/SkCanvas.h"
+#include "include/core/SkMatrix.h"
+#include "include/core/SkPaint.h"
+#include "include/core/SkPoint.h"
+#include "include/core/SkPoint3.h"
+#include "include/core/SkRect.h"
+#include "include/core/SkRefCnt.h"
+#include "include/core/SkScalar.h"
+#include "include/core/SkSize.h"
+#include "include/core/SkString.h"
+#include "include/core/SkTypes.h"
+#include "include/gpu/GrContext.h"
+#include "include/private/GrRecordingContext.h"
+#include "include/private/GrSharedEnums.h"
+#include "include/private/GrTypesPriv.h"
+#include "include/private/SkColorData.h"
+#include "include/utils/SkRandom.h"
+#include "src/core/SkGeometry.h"
+#include "src/core/SkPointPriv.h"
+#include "src/gpu/GrCaps.h"
+#include "src/gpu/GrContextPriv.h"
+#include "src/gpu/GrGeometryProcessor.h"
+#include "src/gpu/GrMemoryPool.h"
+#include "src/gpu/GrOpFlushState.h"
+#include "src/gpu/GrPaint.h"
+#include "src/gpu/GrProcessorAnalysis.h"
+#include "src/gpu/GrProcessorSet.h"
+#include "src/gpu/GrRecordingContextPriv.h"
+#include "src/gpu/GrRenderTargetContext.h"
+#include "src/gpu/GrRenderTargetContextPriv.h"
+#include "src/gpu/GrUserStencilSettings.h"
+#include "src/gpu/effects/GrBezierEffect.h"
+#include "src/gpu/effects/GrPorterDuffXferProcessor.h"
+#include "src/gpu/geometry/GrPathUtils.h"
+#include "src/gpu/ops/GrDrawOp.h"
+#include "src/gpu/ops/GrMeshDrawOp.h"
+#include "src/gpu/ops/GrOp.h"
 
-#include "GrContext.h"
-#include "GrContextPriv.h"
-#include "GrMemoryPool.h"
-#include "GrOpFlushState.h"
-#include "GrPathUtils.h"
-#include "GrRecordingContext.h"
-#include "GrRecordingContextPriv.h"
-#include "GrRenderTargetContextPriv.h"
-#include "SkColorPriv.h"
-#include "SkGeometry.h"
-#include "SkPoint3.h"
-#include "SkPointPriv.h"
-#include "effects/GrBezierEffect.h"
-#include "ops/GrMeshDrawOp.h"
+#include <memory>
+#include <utility>
+
+class GrAppliedClip;
 
 namespace skiagm {
 
@@ -31,14 +58,15 @@ class BezierTestOp : public GrMeshDrawOp {
 public:
     FixedFunctionFlags fixedFunctionFlags() const override { return FixedFunctionFlags::kNone; }
 
-    GrProcessorSet::Analysis finalize(const GrCaps& caps, const GrAppliedClip* clip,
-                                      GrFSAAType fsaaType, GrClampType clampType) override {
+    GrProcessorSet::Analysis finalize(
+            const GrCaps& caps, const GrAppliedClip* clip, bool hasMixedSampledCoverage,
+            GrClampType clampType) override {
         return fProcessorSet.finalize(
                 fColor, GrProcessorAnalysisCoverage::kSingleChannel, clip,
-                &GrUserStencilSettings::kUnused, fsaaType, caps, clampType, &fColor);
+                &GrUserStencilSettings::kUnused, hasMixedSampledCoverage, caps, clampType, &fColor);
     }
 
-    void visitProxies(const VisitProxyFunc& func, VisitorType) const override {
+    void visitProxies(const VisitProxyFunc& func) const override {
         fProcessorSet.visitProxies(func);
     }
 
@@ -50,7 +78,7 @@ protected:
             , fColor(color)
             , fGeometryProcessor(std::move(gp))
             , fProcessorSet(SkBlendMode::kSrc) {
-        this->setBounds(rect, HasAABloat::kYes, IsZeroArea::kNo);
+        this->setBounds(rect, HasAABloat::kYes, IsHairline::kNo);
     }
 
     void onExecute(GrOpFlushState* flushState, const SkRect& chainBounds) override {
@@ -221,7 +249,7 @@ protected:
                     SkRect bounds;
                     //SkPoint bPts[] = {{0.f, 0.f}, {800.f, 800.f}};
                     //bounds.set(bPts, 2);
-                    bounds.set(pts, 3);
+                    bounds.setBounds(pts, 3);
 
                     SkPaint boundsPaint;
                     boundsPaint.setColor(0xff808080);
@@ -421,7 +449,7 @@ protected:
                     }
 
                     SkRect bounds;
-                    bounds.set(pts, 3);
+                    bounds.setBounds(pts, 3);
 
                     SkPaint boundsPaint;
                     boundsPaint.setColor(0xff808080);

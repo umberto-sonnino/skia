@@ -5,13 +5,11 @@
  * found in the LICENSE file.
  */
 
-#include "SkCanvas.h"
-#include "SkTypes.h"
-#include "SkParticleAffector.h"
-#include "SkParticleDrawable.h"
-#include "SkParticleEffect.h"
-#include "SkParticleSerialization.h"
-#include "SkRandom.h"
+#include "include/core/SkCanvas.h"
+#include "include/core/SkTypes.h"
+#include "include/utils/SkRandom.h"
+#include "modules/particles/include/SkParticleEffect.h"
+#include "modules/particles/include/SkParticleSerialization.h"
 
 #include <string>
 
@@ -25,14 +23,14 @@ EMSCRIPTEN_BINDINGS(Particles) {
         .smart_ptr<sk_sp<SkParticleEffect>>("sk_sp<SkParticleEffect>")
         .function("draw", &SkParticleEffect::draw, allow_raw_pointers())
         .function("start", select_overload<void (double, bool)>(&SkParticleEffect::start))
-        .function("update", select_overload<void (double)>(&SkParticleEffect::update));
+        .function("update", select_overload<void (double)>(&SkParticleEffect::update))
+        .function("setPosition", select_overload<void (SkPoint)>(&SkParticleEffect::setPosition))
+        .function("setRate", select_overload<void (float)>(&SkParticleEffect::setRate));
 
     function("MakeParticles", optional_override([](std::string json)->sk_sp<SkParticleEffect> {
         static bool didInit = false;
         if (!didInit) {
-            REGISTER_REFLECTED(SkReflected);
-            SkParticleAffector::RegisterAffectorTypes();
-            SkParticleDrawable::RegisterDrawableTypes();
+            SkParticleEffect::RegisterParticleTypes();
             didInit = true;
         }
         SkRandom r;

@@ -8,9 +8,9 @@
 #ifndef GrVkDescriptorSet_DEFINED
 #define GrVkDescriptorSet_DEFINED
 
-#include "GrVkDescriptorSetManager.h"
-#include "GrVkResource.h"
-#include "vk/GrVkTypes.h"
+#include "include/gpu/vk/GrVkTypes.h"
+#include "src/gpu/vk/GrVkDescriptorSetManager.h"
+#include "src/gpu/vk/GrVkResource.h"
 
 class GrVkDescriptorPool;
 class GrVkGpu;
@@ -23,7 +23,7 @@ public:
 
     ~GrVkDescriptorSet() override {}
 
-    VkDescriptorSet descriptorSet() const { return fDescSet; }
+    const VkDescriptorSet* descriptorSet() const { return &fDescSet; }
 
 #ifdef SK_TRACE_VK_RESOURCES
     void dumpInfo() const override {

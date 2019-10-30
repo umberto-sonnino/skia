@@ -5,32 +5,31 @@
  * found in the LICENSE file.
  */
 
-#include "Resources.h"
-#include "SkAnnotationKeys.h"
-#include "SkCanvas.h"
-#include "SkDashPathEffect.h"
-#include "SkFixed.h"
-#include "SkFontDescriptor.h"
-#include "SkImage.h"
-#include "SkImageSource.h"
-#include "SkLightingShader.h"
-#include "SkMakeUnique.h"
-#include "SkMallocPixelRef.h"
-#include "SkMatrixPriv.h"
-#include "SkNormalSource.h"
-#include "SkOSFile.h"
-#include "SkPicturePriv.h"
-#include "SkPictureRecorder.h"
-#include "SkReadBuffer.h"
-#include "SkShaderBase.h"
-#include "SkTableColorFilter.h"
-#include "SkTemplates.h"
-#include "SkTextBlob.h"
-#include "SkTypeface.h"
-#include "SkWriteBuffer.h"
-#include "SkXfermodeImageFilter.h"
-#include "Test.h"
-#include "ToolUtils.h"
+#include "include/core/SkCanvas.h"
+#include "include/core/SkImage.h"
+#include "include/core/SkMallocPixelRef.h"
+#include "include/core/SkPictureRecorder.h"
+#include "include/core/SkTextBlob.h"
+#include "include/core/SkTypeface.h"
+#include "include/effects/SkDashPathEffect.h"
+#include "include/effects/SkImageFilters.h"
+#include "include/effects/SkTableColorFilter.h"
+#include "include/private/SkFixed.h"
+#include "include/private/SkTemplates.h"
+#include "src/core/SkAnnotationKeys.h"
+#include "src/core/SkFontDescriptor.h"
+#include "src/core/SkMakeUnique.h"
+#include "src/core/SkMatrixPriv.h"
+#include "src/core/SkNormalSource.h"
+#include "src/core/SkOSFile.h"
+#include "src/core/SkPicturePriv.h"
+#include "src/core/SkReadBuffer.h"
+#include "src/core/SkWriteBuffer.h"
+#include "src/shaders/SkLightingShader.h"
+#include "src/shaders/SkShaderBase.h"
+#include "tests/Test.h"
+#include "tools/Resources.h"
+#include "tools/ToolUtils.h"
 
 static const uint32_t kArraySize = 64;
 static const int kBitmapSize = 256;
@@ -274,13 +273,13 @@ static void TestBitmapSerialization(const SkBitmap& validBitmap,
                                     bool shouldSucceed,
                                     skiatest::Reporter* reporter) {
     sk_sp<SkImage> validImage(SkImage::MakeFromBitmap(validBitmap));
-    sk_sp<SkImageFilter> validBitmapSource(SkImageSource::Make(std::move(validImage)));
+    sk_sp<SkImageFilter> validBitmapSource(SkImageFilters::Image(std::move(validImage)));
     sk_sp<SkImage> invalidImage(SkImage::MakeFromBitmap(invalidBitmap));
-    sk_sp<SkImageFilter> invalidBitmapSource(SkImageSource::Make(std::move(invalidImage)));
+    sk_sp<SkImageFilter> invalidBitmapSource(SkImageFilters::Image(std::move(invalidImage)));
     sk_sp<SkImageFilter> xfermodeImageFilter(
-        SkXfermodeImageFilter::Make(SkBlendMode::kSrcOver,
-                                    std::move(invalidBitmapSource),
-                                    std::move(validBitmapSource), nullptr));
+        SkImageFilters::Xfermode(SkBlendMode::kSrcOver,
+                                 std::move(invalidBitmapSource),
+                                 std::move(validBitmapSource), nullptr));
 
     sk_sp<SkImageFilter> deserializedFilter(
         TestFlattenableSerialization<SkImageFilter>(
@@ -446,6 +445,17 @@ static void draw_something(SkCanvas* canvas) {
     canvas->drawString("Picture", SkIntToScalar(kBitmapSize/2), SkIntToScalar(kBitmapSize/4), font, paint);
 }
 
+static sk_sp<SkImage> render(const SkPicture& p) {
+    auto surf = SkSurface::MakeRasterN32Premul(SkScalarRoundToInt(p.cullRect().width()),
+                                               SkScalarRoundToInt(p.cullRect().height()));
+    if (!surf) {
+        return nullptr; // bounds are empty?
+    }
+    surf->getCanvas()->clear(SK_ColorWHITE);
+    p.playback(surf->getCanvas());
+    return surf->makeImageSnapshot();
+}
+
 DEF_TEST(Serialization, reporter) {
     // Test matrix serialization
     {
@@ -572,6 +582,11 @@ DEF_TEST(Serialization, reporter) {
         sk_sp<SkPicture> readPict(SkPicturePriv::MakeFromBuffer(reader));
         REPORTER_ASSERT(reporter, reader.isValid());
         REPORTER_ASSERT(reporter, readPict.get());
+        sk_sp<SkImage> img0 = render(*pict);
+        sk_sp<SkImage> img1 = render(*readPict);
+        if (img0 && img1) {
+            REPORTER_ASSERT(reporter, ToolUtils::equal_pixels(img0.get(), img1.get()));
+        }
     }
 
     TestPictureTypefaceSerialization(reporter);
@@ -631,7 +646,7 @@ DEF_TEST(Serialization, reporter) {
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-#include "SkAnnotation.h"
+#include "include/core/SkAnnotation.h"
 
 static sk_sp<SkPicture> copy_picture_via_serialization(SkPicture* src) {
     SkDynamicMemoryWStream wstream;

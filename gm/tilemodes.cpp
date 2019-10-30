@@ -4,20 +4,32 @@
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
-#include "SkColorFilter.h"
-#include "SkMaskFilter.h"
-#include "SkPath.h"
-#include "SkRegion.h"
-#include "SkShader.h"
-#include "SkTextUtils.h"
-#include "SkUTF.h"
-#include "ToolUtils.h"
-#include "gm.h"
-// effects
-#include "SkGradientShader.h"
-#include "SkBlurDrawLooper.h"
 
-#include "Resources.h"
+#include "gm/gm.h"
+#include "include/core/SkBitmap.h"
+#include "include/core/SkCanvas.h"
+#include "include/core/SkColor.h"
+#include "include/core/SkFilterQuality.h"
+#include "include/core/SkFont.h"
+#include "include/core/SkImage.h"
+#include "include/core/SkImageInfo.h"
+#include "include/core/SkPaint.h"
+#include "include/core/SkPoint.h"
+#include "include/core/SkRect.h"
+#include "include/core/SkRefCnt.h"
+#include "include/core/SkScalar.h"
+#include "include/core/SkShader.h"
+#include "include/core/SkSize.h"
+#include "include/core/SkString.h"
+#include "include/core/SkTileMode.h"
+#include "include/core/SkTypeface.h"
+#include "include/core/SkTypes.h"
+#include "include/effects/SkGradientShader.h"
+#include "include/utils/SkTextUtils.h"
+#include "tools/Resources.h"
+#include "tools/ToolUtils.h"
+
+#include <functional>
 
 static void makebm(SkBitmap* bm, SkColorType ct, int w, int h) {
     bm->allocPixels(SkImageInfo::Make(w, h, ct, kPremul_SkAlphaType));
@@ -185,17 +197,13 @@ typedef sk_sp<SkShader> (*ShaderProc)(SkTileMode, SkTileMode);
 
 class Tiling2GM : public skiagm::GM {
     ShaderProc fProc;
-    SkString   fName;
+    const char* fName;
+
 public:
-    Tiling2GM(ShaderProc proc, const char name[]) : fProc(proc) {
-        fName.printf("tilemode_%s", name);
-    }
+    Tiling2GM(ShaderProc proc, const char name[]) : fProc(proc), fName(name) {}
 
-protected:
-
-    SkString onShortName() override {
-        return fName;
-    }
+private:
+    SkString onShortName() override { return SkString(fName); }
 
     SkISize onISize() override { return SkISize::Make(650, 610); }
 
@@ -249,16 +257,12 @@ protected:
             y += r.height() * 4 / 3;
         }
     }
-
-private:
-    typedef skiagm::GM INHERITED;
 };
-DEF_GM( return new Tiling2GM(make_bm, "bitmap"); )
-DEF_GM( return new Tiling2GM(make_grad, "gradient"); )
+
+DEF_GM( return new Tiling2GM(make_bm,   "tilemode_bitmap"); )
+DEF_GM( return new Tiling2GM(make_grad, "tilemode_gradient"); )
 
 ////////////////////
-
-#include "SkGradientShader.h"
 
 DEF_SIMPLE_GM(tilemode_decal, canvas, 720, 1100) {
     auto img = GetResourceAsImage("images/mandrill_128.png");

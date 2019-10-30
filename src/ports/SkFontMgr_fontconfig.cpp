@@ -5,25 +5,25 @@
  * found in the LICENSE file.
  */
 
-#include "SkAdvancedTypefaceMetrics.h"
-#include "SkDataTable.h"
-#include "SkFixed.h"
-#include "SkFontDescriptor.h"
-#include "SkFontHost_FreeType_common.h"
-#include "SkFontMgr.h"
-#include "SkFontStyle.h"
-#include "SkMakeUnique.h"
-#include "SkMath.h"
-#include "SkMutex.h"
-#include "SkOSFile.h"
-#include "SkRefCnt.h"
-#include "SkStream.h"
-#include "SkString.h"
-#include "SkTDArray.h"
-#include "SkTemplates.h"
-#include "SkTypeface.h"
-#include "SkTypefaceCache.h"
-#include "SkTypes.h"
+#include "include/core/SkDataTable.h"
+#include "include/core/SkFontMgr.h"
+#include "include/core/SkFontStyle.h"
+#include "include/core/SkMath.h"
+#include "include/core/SkRefCnt.h"
+#include "include/core/SkStream.h"
+#include "include/core/SkString.h"
+#include "include/core/SkTypeface.h"
+#include "include/core/SkTypes.h"
+#include "include/private/SkFixed.h"
+#include "include/private/SkMutex.h"
+#include "include/private/SkTDArray.h"
+#include "include/private/SkTemplates.h"
+#include "src/core/SkAdvancedTypefaceMetrics.h"
+#include "src/core/SkFontDescriptor.h"
+#include "src/core/SkMakeUnique.h"
+#include "src/core/SkOSFile.h"
+#include "src/core/SkTypefaceCache.h"
+#include "src/ports/SkFontHost_FreeType_common.h"
 
 #include <fontconfig/fontconfig.h>
 #include <string.h>
@@ -40,7 +40,7 @@ class SkData;
 #endif
 
 #ifdef SK_DEBUG
-#    include "SkTLS.h"
+#    include "src/core/SkTLS.h"
 #endif
 
 /** Since FontConfig is poorly documented, this gives a high level overview:
@@ -64,7 +64,10 @@ namespace {
 
 // Fontconfig is not threadsafe before 2.10.91. Before that, we lock with a global mutex.
 // See https://bug.skia.org/1497 for background.
-SK_DECLARE_STATIC_MUTEX(gFCMutex);
+static SkMutex& f_c_mutex() {
+    static SkMutex& mutex = *(new SkMutex);
+    return mutex;
+}
 
 #ifdef SK_DEBUG
 void* CreateThreadFcLocked() { return new bool(false); }
@@ -75,19 +78,19 @@ void DeleteThreadFcLocked(void* v) { delete static_cast<bool*>(v); }
 
 class FCLocker {
     // Assume FcGetVersion() has always been thread safe.
-    static void lock() {
+    static void lock() SK_NO_THREAD_SAFETY_ANALYSIS {
         if (FcGetVersion() < 21091) {
-            gFCMutex.acquire();
+            f_c_mutex().acquire();
         } else {
             SkDEBUGCODE(bool* threadLocked = THREAD_FC_LOCKED);
             SkASSERT(false == *threadLocked);
             SkDEBUGCODE(*threadLocked = true);
         }
     }
-    static void unlock() {
+    static void unlock() SK_NO_THREAD_SAFETY_ANALYSIS {
         AssertHeld();
         if (FcGetVersion() < 21091) {
-            gFCMutex.release();
+            f_c_mutex().release();
         } else {
             SkDEBUGCODE(*THREAD_FC_LOCKED = false);
         }
@@ -109,7 +112,7 @@ public:
 
     static void AssertHeld() { SkDEBUGCODE(
         if (FcGetVersion() < 21091) {
-            gFCMutex.assertHeld();
+            f_c_mutex().assertHeld();
         } else {
             SkASSERT(true == *THREAD_FC_LOCKED);
         }
@@ -699,7 +702,7 @@ class SkFontMgr_fontconfig : public SkFontMgr {
      */
     sk_sp<SkTypeface> createTypefaceFromFcPattern(FcPattern* pattern) const {
         FCLocker::AssertHeld();
-        SkAutoMutexAcquire ama(fTFCacheMutex);
+        SkAutoMutexExclusive ama(fTFCacheMutex);
         sk_sp<SkTypeface> face = fTFCache.findByProcAndRef(FindByFcPattern, pattern);
         if (!face) {
             FcPatternReference(pattern);

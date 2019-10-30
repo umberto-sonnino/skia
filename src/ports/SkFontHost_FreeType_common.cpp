@@ -6,14 +6,14 @@
  * found in the LICENSE file.
  */
 
-#include "SkBitmap.h"
-#include "SkCanvas.h"
-#include "SkColor.h"
-#include "SkColorData.h"
-#include "SkFDot6.h"
-#include "SkFontHost_FreeType_common.h"
-#include "SkPath.h"
-#include "SkTo.h"
+#include "include/core/SkBitmap.h"
+#include "include/core/SkCanvas.h"
+#include "include/core/SkColor.h"
+#include "include/core/SkPath.h"
+#include "include/private/SkColorData.h"
+#include "include/private/SkTo.h"
+#include "src/core/SkFDot6.h"
+#include "src/ports/SkFontHost_FreeType_common.h"
 
 #include <utility>
 
@@ -595,7 +595,7 @@ void SkScalerContext_FreeType_Base::generateGlyphImage(
 
             SkMask unscaledBitmapAlias;
             unscaledBitmapAlias.fImage = reinterpret_cast<uint8_t*>(unscaledBitmap.getPixels());
-            unscaledBitmapAlias.fBounds.set(0, 0, unscaledBitmap.width(), unscaledBitmap.height());
+            unscaledBitmapAlias.fBounds.setWH(unscaledBitmap.width(), unscaledBitmap.height());
             unscaledBitmapAlias.fRowBytes = unscaledBitmap.rowBytes();
             unscaledBitmapAlias.fFormat = SkMaskFormat_for_SkColorType(unscaledBitmap.colorType());
             copyFTBitmap(face->glyph->bitmap, unscaledBitmapAlias);

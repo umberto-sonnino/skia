@@ -4,10 +4,23 @@
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
-#include "gm.h"
-#include "SkPath.h"
-#include "SkRandom.h"
-#include "SkTArray.h"
+
+#include "gm/gm.h"
+#include "include/core/SkCanvas.h"
+#include "include/core/SkColor.h"
+#include "include/core/SkMatrix.h"
+#include "include/core/SkPaint.h"
+#include "include/core/SkPath.h"
+#include "include/core/SkRect.h"
+#include "include/core/SkScalar.h"
+#include "include/core/SkSize.h"
+#include "include/core/SkString.h"
+#include "include/core/SkTypes.h"
+#include "include/private/SkNoncopyable.h"
+#include "include/private/SkTArray.h"
+#include "include/utils/SkRandom.h"
+
+namespace {
 
 class SkDoOnce : SkNoncopyable {
 public:
@@ -24,25 +37,15 @@ private:
     bool fDidOnce;
 };
 
-namespace skiagm {
-
-class ConvexPathsGM : public GM {
+class ConvexPathsGM : public skiagm::GM {
     SkDoOnce fOnce;
-public:
-    ConvexPathsGM() {
-        this->setBGColor(0xFF000000);
-    }
 
-protected:
+    void onOnceBeforeDraw() override { this->setBGColor(0xFF000000); }
 
-    virtual SkString onShortName() {
-        return SkString("convexpaths");
-    }
+    SkString onShortName() override { return SkString("convexpaths"); }
 
 
-    virtual SkISize onISize() {
-        return SkISize::Make(1200, 1100);
-    }
+    SkISize onISize() override { return {1200, 1100}; }
 
     void makePaths() {
         if (fOnce.alreadyDone()) {
@@ -267,7 +270,7 @@ protected:
         fPaths.push_back().addCircle(0, 0, 1.2f);
     }
 
-    virtual void onDraw(SkCanvas* canvas) {
+    void onDraw(SkCanvas* canvas) override {
         this->makePaths();
 
         SkPaint paint;
@@ -295,13 +298,8 @@ protected:
         }
     }
 
-private:
-    typedef GM INHERITED;
     SkTArray<SkPath> fPaths;
 };
-
-//////////////////////////////////////////////////////////////////////////////
+}  // namespace
 
 DEF_GM( return new ConvexPathsGM; )
-
-}

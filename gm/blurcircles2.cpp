@@ -5,15 +5,21 @@
 * found in the LICENSE file.
 */
 
-#include "AnimTimer.h"
-#include "SkBlurMask.h"
-#include "SkBlurMaskFilter.h"
-#include "SkCanvas.h"
-#include "SkPaint.h"
-#include "SkPath.h"
-#include "SkRandom.h"
-#include "SkString.h"
-#include "gm.h"
+#include "gm/gm.h"
+#include "include/core/SkBlurTypes.h"
+#include "include/core/SkCanvas.h"
+#include "include/core/SkColor.h"
+#include "include/core/SkMaskFilter.h"
+#include "include/core/SkPaint.h"
+#include "include/core/SkPath.h"
+#include "include/core/SkRect.h"
+#include "include/core/SkRefCnt.h"
+#include "include/core/SkScalar.h"
+#include "include/core/SkSize.h"
+#include "include/core/SkString.h"
+#include "include/utils/SkRandom.h"
+#include "src/core/SkBlurMask.h"
+#include "tools/timer/TimeUtils.h"
 
 /**
  * In GM mode this draws an array of circles with different radii and different blur radii. Below
@@ -28,9 +34,9 @@
 class BlurCircles2GM : public skiagm::GM {
 public:
     BlurCircles2GM() {
-        fAnimRadius = AnimTimer::PingPong(
+        fAnimRadius = TimeUtils::PingPong(
                 0, kRadiusPingPoingPeriod, kRadiusPingPoingShift, kMinRadius, kMaxRadius);
-        fAnimBlurRadius = AnimTimer::PingPong(0,
+        fAnimBlurRadius = TimeUtils::PingPong(0,
                                               kBlurRadiusPingPoingPeriod,
                                               kBlurRadiusPingPoingShift,
                                               kMinBlurRadius,
@@ -135,10 +141,10 @@ protected:
         }
     }
 
-    bool onAnimate(const AnimTimer& timer) override {
-        fAnimRadius = timer.pingPong(kRadiusPingPoingPeriod, kRadiusPingPoingShift, kMinRadius,
+    bool onAnimate(double nanos) override {
+        fAnimRadius = TimeUtils::PingPong(1e-9 * nanos, kRadiusPingPoingPeriod, kRadiusPingPoingShift, kMinRadius,
                                      kMaxRadius);
-        fAnimBlurRadius = timer.pingPong(kBlurRadiusPingPoingPeriod, kBlurRadiusPingPoingShift,
+        fAnimBlurRadius = TimeUtils::PingPong(1e-9 * nanos, kBlurRadiusPingPoingPeriod, kBlurRadiusPingPoingShift,
                                          kMinBlurRadius, kMaxBlurRadius);
         return true;
     }

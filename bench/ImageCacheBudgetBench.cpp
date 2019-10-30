@@ -5,14 +5,14 @@
  * found in the LICENSE file.
  */
 
-#include "Benchmark.h"
-#include "SkCanvas.h"
-#include "SkImage.h"
-#include "SkSurface.h"
-#include "ToolUtils.h"
+#include "bench/Benchmark.h"
+#include "include/core/SkCanvas.h"
+#include "include/core/SkImage.h"
+#include "include/core/SkSurface.h"
+#include "tools/ToolUtils.h"
 
-#include "GrContext.h"
-#include "GrContextPriv.h"
+#include "include/gpu/GrContext.h"
+#include "src/gpu/GrContextPriv.h"
 
 #include <utility>
 
@@ -91,7 +91,7 @@ protected:
     void onPerCanvasPreDraw(SkCanvas* canvas) override {
         GrContext* context = canvas->getGrContext();
         SkASSERT(context);
-        context->getResourceCacheLimits(&fOldCount, &fOldBytes);
+        fOldBytes = context->getResourceCacheLimit();
         set_cache_budget(canvas, fBudgetSize);
         make_images(fImages, kImagesToDraw);
         if (fShuffle) {
@@ -114,7 +114,7 @@ protected:
     void onPerCanvasPostDraw(SkCanvas* canvas) override {
         GrContext* context =  canvas->getGrContext();
         SkASSERT(context);
-        context->setResourceCacheLimits(fOldCount, fOldBytes);
+        context->setResourceCacheLimit(fOldBytes);
         for (int i = 0; i < kImagesToDraw; ++i) {
             fImages[i].reset();
         }
@@ -149,7 +149,6 @@ private:
     sk_sp<SkImage>              fImages[kImagesToDraw];
     std::unique_ptr<int[]>      fIndices;
     size_t                      fOldBytes;
-    int                         fOldCount;
 
     typedef Benchmark INHERITED;
 };

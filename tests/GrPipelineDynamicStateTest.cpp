@@ -5,26 +5,28 @@
  * found in the LICENSE file.
  */
 
-#include "SkTypes.h"
-#include "Test.h"
+#include "include/core/SkTypes.h"
+#include "tests/Test.h"
 
-#include "GrColor.h"
-#include "GrContext.h"
-#include "GrContextPriv.h"
-#include "GrGeometryProcessor.h"
-#include "GrGpuCommandBuffer.h"
-#include "GrMemoryPool.h"
-#include "GrOpFlushState.h"
-#include "GrRecordingContext.h"
-#include "GrRecordingContextPriv.h"
-#include "GrRenderTargetContext.h"
-#include "GrRenderTargetContextPriv.h"
-#include "GrResourceProvider.h"
-#include "SkMakeUnique.h"
-#include "glsl/GrGLSLVertexGeoBuilder.h"
-#include "glsl/GrGLSLFragmentShaderBuilder.h"
-#include "glsl/GrGLSLGeometryProcessor.h"
-#include "glsl/GrGLSLVarying.h"
+#include "include/gpu/GrContext.h"
+#include "include/private/GrRecordingContext.h"
+#include "src/core/SkMakeUnique.h"
+#include "src/gpu/GrColor.h"
+#include "src/gpu/GrContextPriv.h"
+#include "src/gpu/GrGeometryProcessor.h"
+#include "src/gpu/GrImageInfo.h"
+#include "src/gpu/GrMemoryPool.h"
+#include "src/gpu/GrOpFlushState.h"
+#include "src/gpu/GrOpsRenderPass.h"
+#include "src/gpu/GrProgramInfo.h"
+#include "src/gpu/GrRecordingContextPriv.h"
+#include "src/gpu/GrRenderTargetContext.h"
+#include "src/gpu/GrRenderTargetContextPriv.h"
+#include "src/gpu/GrResourceProvider.h"
+#include "src/gpu/glsl/GrGLSLFragmentShaderBuilder.h"
+#include "src/gpu/glsl/GrGLSLGeometryProcessor.h"
+#include "src/gpu/glsl/GrGLSLVarying.h"
+#include "src/gpu/glsl/GrGLSLVertexGeoBuilder.h"
 
 /**
  * This is a GPU-backend specific test for dynamic pipeline state. It draws boxes using dynamic
@@ -129,18 +131,19 @@ private:
         , fScissorTest(scissorTest)
         , fVertexBuffer(std::move(vbuff)) {
         this->setBounds(SkRect::MakeIWH(kScreenSize, kScreenSize),
-                        HasAABloat::kNo, IsZeroArea::kNo);
+                        HasAABloat::kNo, IsHairline::kNo);
     }
 
     const char* name() const override { return "GrPipelineDynamicStateTestOp"; }
     FixedFunctionFlags fixedFunctionFlags() const override { return FixedFunctionFlags::kNone; }
-    GrProcessorSet::Analysis finalize(
-            const GrCaps&, const GrAppliedClip*, GrFSAAType, GrClampType) override {
+    GrProcessorSet::Analysis finalize(const GrCaps&, const GrAppliedClip*,
+                                      bool hasMixedSampledCoverage, GrClampType) override {
         return GrProcessorSet::EmptySetAnalysis();
     }
     void onPrepare(GrOpFlushState*) override {}
-    void onExecute(GrOpFlushState* state, const SkRect& chainBounds) override {
-        GrPipeline pipeline(fScissorTest, SkBlendMode::kSrc);
+    void onExecute(GrOpFlushState* flushState, const SkRect& chainBounds) override {
+        GrPipeline pipeline(fScissorTest, SkBlendMode::kSrc,
+                            flushState->drawOpArgs().outputSwizzle());
         SkSTArray<kNumMeshes, GrMesh> meshes;
         for (int i = 0; i < kNumMeshes; ++i) {
             GrMesh& mesh = meshes.emplace_back(GrPrimitiveType::kTriangleStrip);
@@ -149,9 +152,18 @@ private:
         }
         GrPipeline::DynamicStateArrays dynamicState;
         dynamicState.fScissorRects = kDynamicScissors;
-        state->rtCommandBuffer()->draw(GrPipelineDynamicStateTestProcessor(), pipeline, nullptr,
-                                       &dynamicState, meshes.begin(), 4,
-                                       SkRect::MakeIWH(kScreenSize, kScreenSize));
+
+        GrPipelineDynamicStateTestProcessor primProc;
+
+        GrProgramInfo programInfo(flushState->drawOpArgs().numSamples(),
+                                  flushState->drawOpArgs().origin(),
+                                  pipeline,
+                                  primProc,
+                                  nullptr,
+                                  &dynamicState, 0);
+
+        flushState->opsRenderPass()->draw(programInfo, meshes.begin(), 4,
+                                          SkRect::MakeIWH(kScreenSize, kScreenSize));
     }
 
     GrScissorTest               fScissorTest;
@@ -164,12 +176,8 @@ DEF_GPUTEST_FOR_RENDERING_CONTEXTS(GrPipelineDynamicStateTest, reporter, ctxInfo
     GrContext* context = ctxInfo.grContext();
     GrResourceProvider* rp = context->priv().resourceProvider();
 
-    const GrBackendFormat format =
-            context->priv().caps()->getBackendFormatFromColorType(kRGBA_8888_SkColorType);
-
-    sk_sp<GrRenderTargetContext> rtc(context->priv().makeDeferredRenderTargetContext(
-                                                 format, SkBackingFit::kExact, kScreenSize,
-                                                 kScreenSize, kRGBA_8888_GrPixelConfig, nullptr));
+    auto rtc = context->priv().makeDeferredRenderTargetContext(
+            SkBackingFit::kExact, kScreenSize, kScreenSize, GrColorType::kRGBA_8888, nullptr);
     if (!rtc) {
         ERRORF(reporter, "could not create render target context.");
         return;
@@ -214,7 +222,7 @@ DEF_GPUTEST_FOR_RENDERING_CONTEXTS(GrPipelineDynamicStateTest, reporter, ctxInfo
             GrPipelineDynamicStateTestOp::Make(context, scissorTest, vbuff));
         rtc->readPixels(SkImageInfo::Make(kScreenSize, kScreenSize,
                                           kRGBA_8888_SkColorType, kPremul_SkAlphaType),
-                        resultPx, 4 * kScreenSize, 0, 0, 0);
+                        resultPx, 4 * kScreenSize, {0, 0});
         for (int y = 0; y < kScreenSize; ++y) {
             for (int x = 0; x < kScreenSize; ++x) {
                 int expectedColorIdx;

@@ -5,27 +5,28 @@
 * found in the LICENSE file.
 */
 
-#include "SkShadowUtils.h"
-#include "SkBlurMask.h"
-#include "SkCanvas.h"
-#include "SkColorFilter.h"
-#include "SkColorData.h"
-#include "SkDevice.h"
-#include "SkDrawShadowInfo.h"
-#include "SkEffectPriv.h"
-#include "SkMaskFilter.h"
-#include "SkPath.h"
-#include "SkRandom.h"
-#include "SkRasterPipeline.h"
-#include "SkResourceCache.h"
-#include "SkShadowTessellator.h"
-#include "SkString.h"
-#include "SkTLazy.h"
-#include "SkVertices.h"
+#include "include/core/SkCanvas.h"
+#include "include/core/SkColorFilter.h"
+#include "include/core/SkMaskFilter.h"
+#include "include/core/SkPath.h"
+#include "include/core/SkString.h"
+#include "include/core/SkVertices.h"
+#include "include/private/SkColorData.h"
+#include "include/utils/SkRandom.h"
+#include "include/utils/SkShadowUtils.h"
+#include "src/core/SkBlurMask.h"
+#include "src/core/SkDevice.h"
+#include "src/core/SkDrawShadowInfo.h"
+#include "src/core/SkEffectPriv.h"
+#include "src/core/SkPathPriv.h"
+#include "src/core/SkRasterPipeline.h"
+#include "src/core/SkResourceCache.h"
+#include "src/core/SkTLazy.h"
+#include "src/utils/SkShadowTessellator.h"
 #include <new>
 #if SK_SUPPORT_GPU
-#include "GrShape.h"
-#include "effects/generated/GrBlurredEdgeFragmentProcessor.h"
+#include "src/gpu/effects/generated/GrBlurredEdgeFragmentProcessor.h"
+#include "src/gpu/geometry/GrShape.h"
 #endif
 
 /**
@@ -41,8 +42,8 @@ public:
     }
 
 #if SK_SUPPORT_GPU
-    std::unique_ptr<GrFragmentProcessor> asFragmentProcessor(
-            GrRecordingContext*, const GrColorSpaceInfo&) const override;
+    std::unique_ptr<GrFragmentProcessor> asFragmentProcessor(GrRecordingContext*,
+                                                             const GrColorInfo&) const override;
 #endif
 
 protected:
@@ -66,7 +67,7 @@ sk_sp<SkFlattenable> SkGaussianColorFilter::CreateProc(SkReadBuffer&) {
 #if SK_SUPPORT_GPU
 
 std::unique_ptr<GrFragmentProcessor> SkGaussianColorFilter::asFragmentProcessor(
-        GrRecordingContext*, const GrColorSpaceInfo&) const {
+        GrRecordingContext*, const GrColorInfo&) const {
     return GrBlurredEdgeFragmentProcessor::Make(GrBlurredEdgeFragmentProcessor::Mode::kGaussian);
 }
 #endif
@@ -148,7 +149,6 @@ struct SpotVerticesFactory {
                 return false;
         }
         SK_ABORT("Uninitialized occluder type?");
-        return false;
     }
 
     sk_sp<SkVertices> makeVertices(const SkPath& path, const SkMatrix& ctm,
@@ -380,6 +380,31 @@ private:
 // This creates a domain of keys in SkResourceCache used by this file.
 static void* kNamespace;
 
+// When the SkPathRef genID changes, invalidate a corresponding GrResource described by key.
+class ShadowInvalidator : public SkPathRef::GenIDChangeListener {
+public:
+    ShadowInvalidator(const SkResourceCache::Key& key) {
+        fKey.reset(new uint8_t[key.size()]);
+        memcpy(fKey.get(), &key, key.size());
+    }
+
+private:
+    const SkResourceCache::Key& getKey() const {
+        return *reinterpret_cast<SkResourceCache::Key*>(fKey.get());
+    }
+
+    // always purge
+    static bool FindVisitor(const SkResourceCache::Rec&, void*) {
+        return false;
+    }
+
+    void onChange() override {
+        SkResourceCache::Find(this->getKey(), ShadowInvalidator::FindVisitor, nullptr);
+    }
+
+    std::unique_ptr<uint8_t[]> fKey;
+};
+
 /**
  * Draws a shadow to 'canvas'. The vertices used to draw the shadow are created by 'factory' unless
  * they are first found in SkResourceCache.
@@ -421,6 +446,7 @@ bool draw_shadow(const FACTORY& factory,
                 return false;
             }
             auto rec = new CachedTessellationsRec(*key, std::move(tessellations));
+            SkPathPriv::AddGenIDChangeListener(path.path(), sk_make_sp<ShadowInvalidator>(*key));
             SkResourceCache::Add(rec);
         } else {
             vertices = factory.makeVertices(path.path(), path.viewMatrix(),
@@ -545,10 +571,11 @@ void SkBaseDevice::drawShadow(const SkPath& path, const SkDrawShadowRec& rec) {
             // For perspective shadows we've already computed the shadow in world space,
             // and we can't translate it without changing it. Otherwise we concat the
             // change in translation from the cached version.
-            SkAutoDeviceCTMRestore adr(
-                this,
-                hasPerspective ? SkMatrix::I()
-                               : SkMatrix::Concat(this->ctm(), SkMatrix::MakeTrans(tx, ty)));
+            SkAutoDeviceTransformRestore adr(
+                    this,
+                    hasPerspective ? SkMatrix::I()
+                                   : SkMatrix::Concat(this->localToDevice(),
+                                                      SkMatrix::MakeTrans(tx, ty)));
             this->drawVertices(vertices, nullptr, 0, mode, paint);
         }
     };
@@ -557,8 +584,8 @@ void SkBaseDevice::drawShadow(const SkPath& path, const SkDrawShadowRec& rec) {
         return;
     }
 
-    SkMatrix viewMatrix = this->ctm();
-    SkAutoDeviceCTMRestore adr(this, SkMatrix::I());
+    SkMatrix viewMatrix = this->localToDevice();
+    SkAutoDeviceTransformRestore adr(this, SkMatrix::I());
 
     ShadowedPath shadowedPath(&path, &viewMatrix);
 
@@ -726,7 +753,7 @@ void SkBaseDevice::drawShadow(const SkPath& path, const SkDrawShadowRec& rec) {
                                                                  &shadowMatrix, &radius)) {
                     return;
                 }
-                SkAutoDeviceCTMRestore adr(this, shadowMatrix);
+                SkAutoDeviceTransformRestore adr(this, shadowMatrix);
 
                 SkPaint paint;
                 paint.setColor(rec.fSpotColor);

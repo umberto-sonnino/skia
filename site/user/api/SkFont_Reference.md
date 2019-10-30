@@ -210,7 +210,7 @@ glyph positioned in pixel using transparency</td>
 
 ### Example
 
-<div><fiddle-embed name="882e8e0103048009a25cfc20400492f7"></fiddle-embed></div>
+<div><fiddle-embed name="@incomplete"></fiddle-embed></div>
 
 ### See Also
 
@@ -232,7 +232,7 @@ default initialized <a href='SkFont_Reference#SkFont'>SkFont</a>
 
 ### Example
 
-<div><fiddle-embed name="882e8e0103048009a25cfc20400492f7"></fiddle-embed></div>
+<div><fiddle-embed name="@incomplete"></fiddle-embed></div>
 
 ### See Also
 
@@ -264,7 +264,7 @@ initialized <a href='SkFont_Reference#SkFont'>SkFont</a>
 
 ### Example
 
-<div><fiddle-embed name="882e8e0103048009a25cfc20400492f7"></fiddle-embed></div>
+<div><fiddle-embed name="@incomplete"></fiddle-embed></div>
 
 ### See Also
 
@@ -304,7 +304,7 @@ initialized <a href='SkFont_Reference#SkFont'>SkFont</a>
 
 ### Example
 
-<div><fiddle-embed name="882e8e0103048009a25cfc20400492f7"></fiddle-embed></div>
+<div><fiddle-embed name="@incomplete"></fiddle-embed></div>
 
 ### See Also
 
@@ -334,7 +334,7 @@ true if <a href='SkFont_Reference#SkFont'>SkFont</a> pair are equivalent
 
 ### Example
 
-<div><fiddle-embed name="882e8e0103048009a25cfc20400492f7"></fiddle-embed></div>
+<div><fiddle-embed name="@incomplete"></fiddle-embed></div>
 
 ### See Also
 
@@ -357,7 +357,7 @@ true if all <a href='undocumented#Glyph'>glyphs</a> are hinted
 
 ### Example
 
-<div><fiddle-embed name="882e8e0103048009a25cfc20400492f7"></fiddle-embed></div>
+<div><fiddle-embed name="@incomplete"></fiddle-embed></div>
 
 ### See Also
 
@@ -379,7 +379,7 @@ true if <a href='undocumented#Glyph'>glyphs</a> may be <a href='SkFont_Reference
 
 ### Example
 
-<div><fiddle-embed name="882e8e0103048009a25cfc20400492f7"></fiddle-embed></div>
+<div><fiddle-embed name="@incomplete"></fiddle-embed></div>
 
 ### See Also
 
@@ -401,7 +401,7 @@ true if <a href='undocumented#Glyph'>glyph</a> positioned in <a href='undocument
 
 ### Example
 
-<div><fiddle-embed name="882e8e0103048009a25cfc20400492f7"></fiddle-embed></div>
+<div><fiddle-embed name="@incomplete"></fiddle-embed></div>
 
 ### See Also
 
@@ -423,7 +423,7 @@ true <a href='undocumented#Glyph'>glyph</a> hints are never applied
 
 ### Example
 
-<div><fiddle-embed name="882e8e0103048009a25cfc20400492f7"></fiddle-embed></div>
+<div><fiddle-embed name="@incomplete"></fiddle-embed></div>
 
 ### See Also
 
@@ -446,7 +446,7 @@ bold is approximated through stroke width
 
 ### Example
 
-<div><fiddle-embed name="882e8e0103048009a25cfc20400492f7"></fiddle-embed></div>
+<div><fiddle-embed name="@incomplete"></fiddle-embed></div>
 
 ### See Also
 
@@ -474,7 +474,7 @@ Only affects platforms that use FreeType as the  <a href='undocumented#Font_Mana
 
 ### Example
 
-<div><fiddle-embed name="882e8e0103048009a25cfc20400492f7"></fiddle-embed></div>
+<div><fiddle-embed name="@incomplete"></fiddle-embed></div>
 
 ### See Also
 
@@ -499,7 +499,7 @@ Requests, but does not require, to use <a href='SkBitmap_Reference#Bitmap'>bitma
 
 ### Example
 
-<div><fiddle-embed name="882e8e0103048009a25cfc20400492f7"></fiddle-embed></div>
+<div><fiddle-embed name="@incomplete"></fiddle-embed></div>
 
 ### See Also
 
@@ -524,7 +524,7 @@ Requests, but does not require, that <a href='undocumented#Glyph'>glyphs</a> res
 
 ### Example
 
-<div><fiddle-embed name="882e8e0103048009a25cfc20400492f7"></fiddle-embed></div>
+<div><fiddle-embed name="@incomplete"></fiddle-embed></div>
 
 ### See Also
 
@@ -550,7 +550,7 @@ before drawing and measuring.
 
 ### Example
 
-<div><fiddle-embed name="882e8e0103048009a25cfc20400492f7"></fiddle-embed></div>
+<div><fiddle-embed name="@incomplete"></fiddle-embed></div>
 
 ### See Also
 
@@ -575,7 +575,7 @@ Increases stroke width when creating <a href='undocumented#Glyph'>glyph</a> <a h
 
 ### Example
 
-<div><fiddle-embed name="882e8e0103048009a25cfc20400492f7"></fiddle-embed></div>
+<div><fiddle-embed name="@incomplete"></fiddle-embed></div>
 
 ### See Also
 
@@ -597,7 +597,7 @@ one of: <a href='#SkFont_Edging'>Edging</a>::<a href='#SkFont_Edging_kAlias'>kAl
 
 ### Example
 
-<div><fiddle-embed name="882e8e0103048009a25cfc20400492f7"></fiddle-embed></div>
+<div><fiddle-embed name="@incomplete"></fiddle-embed></div>
 
 ### See Also
 
@@ -623,7 +623,7 @@ partial transparency.
 
 ### Example
 
-<div><fiddle-embed name="882e8e0103048009a25cfc20400492f7"></fiddle-embed></div>
+<div><fiddle-embed name="@incomplete"></fiddle-embed></div>
 
 ### See Also
 
@@ -651,7 +651,7 @@ Does not check for valid values of <a href='#SkFont_setHinting_hintingLevel'>hin
 
 ### Example
 
-<div><fiddle-embed name="882e8e0103048009a25cfc20400492f7"></fiddle-embed></div>
+<div><fiddle-embed name="@incomplete"></fiddle-embed></div>
 
 ### See Also
 
@@ -675,7 +675,7 @@ one of: <a href='undocumented#SkFontHinting'>SkFontHinting</a>::<a href='#SkFont
 
 ### Example
 
-<div><fiddle-embed name="882e8e0103048009a25cfc20400492f7"></fiddle-embed></div>
+<div><fiddle-embed name="@incomplete"></fiddle-embed></div>
 
 ### See Also
 
@@ -705,7 +705,7 @@ initialized <a href='SkFont_Reference#SkFont'>SkFont</a>
 
 ### Example
 
-<div><fiddle-embed name="882e8e0103048009a25cfc20400492f7"></fiddle-embed></div>
+<div><fiddle-embed name="@incomplete"></fiddle-embed></div>
 
 ### See Also
 
@@ -728,7 +728,7 @@ Does not alter <a href='undocumented#SkTypeface'>SkTypeface</a> <a href='undocum
 
 ### Example
 
-<div><fiddle-embed name="882e8e0103048009a25cfc20400492f7"></fiddle-embed></div>
+<div><fiddle-embed name="@incomplete"></fiddle-embed></div>
 
 ### See Also
 
@@ -750,7 +750,7 @@ typographic height of <a href='undocumented#Text'>text</a>
 
 ### Example
 
-<div><fiddle-embed name="882e8e0103048009a25cfc20400492f7"></fiddle-embed></div>
+<div><fiddle-embed name="@incomplete"></fiddle-embed></div>
 
 ### See Also
 
@@ -773,7 +773,7 @@ Default value is 1.
 
 ### Example
 
-<div><fiddle-embed name="882e8e0103048009a25cfc20400492f7"></fiddle-embed></div>
+<div><fiddle-embed name="@incomplete"></fiddle-embed></div>
 
 ### See Also
 
@@ -796,7 +796,7 @@ additional shear on x-axis relative to y-axis
 
 ### Example
 
-<div><fiddle-embed name="882e8e0103048009a25cfc20400492f7"></fiddle-embed></div>
+<div><fiddle-embed name="@incomplete"></fiddle-embed></div>
 
 ### See Also
 
@@ -818,7 +818,7 @@ Increases <a href='undocumented#SkTypeface'>SkTypeface</a> <a href='undocumented
 
 ### Example
 
-<div><fiddle-embed name="882e8e0103048009a25cfc20400492f7"></fiddle-embed></div>
+<div><fiddle-embed name="@incomplete"></fiddle-embed></div>
 
 ### See Also
 
@@ -845,7 +845,7 @@ Pass nullptr to clear <a href='undocumented#SkTypeface'>SkTypeface</a> and use t
 
 ### Example
 
-<div><fiddle-embed name="882e8e0103048009a25cfc20400492f7"></fiddle-embed></div>
+<div><fiddle-embed name="@incomplete"></fiddle-embed></div>
 
 ### See Also
 
@@ -871,7 +871,7 @@ Has no effect if <a href='#SkFont_setSize_textSize'>textSize</a> is not greater 
 
 ### Example
 
-<div><fiddle-embed name="882e8e0103048009a25cfc20400492f7"></fiddle-embed></div>
+<div><fiddle-embed name="@incomplete"></fiddle-embed></div>
 
 ### See Also
 
@@ -897,7 +897,7 @@ Default value is 1.
 
 ### Example
 
-<div><fiddle-embed name="882e8e0103048009a25cfc20400492f7"></fiddle-embed></div>
+<div><fiddle-embed name="@incomplete"></fiddle-embed></div>
 
 ### See Also
 
@@ -923,7 +923,7 @@ Default value is zero.
 
 ### Example
 
-<div><fiddle-embed name="882e8e0103048009a25cfc20400492f7"></fiddle-embed></div>
+<div><fiddle-embed name="@incomplete"></fiddle-embed></div>
 
 ### See Also
 
@@ -948,7 +948,7 @@ Does not check <a href='#SkFont_textToGlyphs_text'>text</a> for valid character 
 If <a href='#SkFont_textToGlyphs_byteLength'>byteLength</a> equals zero, returns zero.
 If <a href='#SkFont_textToGlyphs_byteLength'>byteLength</a> includes a partial character, the partial character is ignored.
 
-If <a href='#SkFont_textToGlyphs_encoding'>encoding</a> is <a href='undocumented#kUTF8_SkTextEncoding'>kUTF8_SkTextEncoding</a> and <a href='#SkFont_textToGlyphs_text'>text</a> contains an invalid UTF-8 sequence,
+If <a href='#SkFont_textToGlyphs_encoding'>encoding</a> is <a href='undocumented#SkTextEncoding::kUTF8'>SkTextEncoding::kUTF8</a> and <a href='#SkFont_textToGlyphs_text'>text</a> contains an invalid UTF-8 sequence,
 zero is returned.
 
 If <a href='#SkFont_textToGlyphs_maxGlyphCount'>maxGlyphCount</a> is not sufficient to store all the <a href='#SkFont_textToGlyphs_glyphs'>glyphs</a>, no <a href='#SkFont_textToGlyphs_glyphs'>glyphs</a> are copied.
@@ -963,11 +963,11 @@ The total <a href='undocumented#Glyph'>glyph</a> count is returned for subsequen
     <td>length of character storage in bytes</td>
   </tr>
   <tr>    <td><a name='SkFont_textToGlyphs_encoding'><code><strong>encoding</strong></code></a></td>
-    <td>one of: <a href='undocumented#kUTF8_SkTextEncoding'>kUTF8_SkTextEncoding</a>, <a href='undocumented#kUTF16_SkTextEncoding'>kUTF16_SkTextEncoding</a>,</td>
+    <td>one of: <a href='undocumented#SkTextEncoding::kUTF8'>SkTextEncoding::kUTF8</a>, <a href='undocumented#SkTextEncoding::kUTF16'>SkTextEncoding::kUTF16</a>,</td>
   </tr>
 </table>
 
-<a href='undocumented#kUTF32_SkTextEncoding'>kUTF32_SkTextEncoding</a>, <a href='undocumented#kGlyphID_SkTextEncoding'>kGlyphID_SkTextEncoding</a>
+<a href='undocumented#SkTextEncoding::kUTF32'>SkTextEncoding::kUTF32</a>, <a href='undocumented#SkTextEncoding::kGlyphID'>SkTextEncoding::kGlyphID</a>
 
 ### Parameters
 
@@ -985,7 +985,7 @@ number of <a href='#SkFont_textToGlyphs_glyphs'>glyphs</a> represented by <a hre
 
 ### Example
 
-<div><fiddle-embed name="882e8e0103048009a25cfc20400492f7"></fiddle-embed></div>
+<div><fiddle-embed name="@incomplete"></fiddle-embed></div>
 
 ### See Also
 
@@ -1014,7 +1014,7 @@ Returns <a href='undocumented#Glyph'>glyph</a> index for Unicode character.
 
 ### Example
 
-<div><fiddle-embed name="882e8e0103048009a25cfc20400492f7"></fiddle-embed></div>
+<div><fiddle-embed name="@incomplete"></fiddle-embed></div>
 
 ### See Also
 
@@ -1039,11 +1039,11 @@ Returns number of <a href='undocumented#Glyph'>glyphs</a> represented by <a href
     <td>length of character storage in bytes</td>
   </tr>
   <tr>    <td><a name='SkFont_countText_encoding'><code><strong>encoding</strong></code></a></td>
-    <td>one of: <a href='undocumented#kUTF8_SkTextEncoding'>kUTF8_SkTextEncoding</a>, <a href='undocumented#kUTF16_SkTextEncoding'>kUTF16_SkTextEncoding</a>,</td>
+    <td>one of: <a href='undocumented#SkTextEncoding::kUTF8'>SkTextEncoding::kUTF8</a>, <a href='undocumented#SkTextEncoding::kUTF16'>SkTextEncoding::kUTF16</a>,</td>
   </tr>
 </table>
 
-<a href='undocumented#kUTF32_SkTextEncoding'>kUTF32_SkTextEncoding</a>, <a href='undocumented#kGlyphID_SkTextEncoding'>kGlyphID_SkTextEncoding</a>
+<a href='undocumented#SkTextEncoding::kUTF32'>SkTextEncoding::kUTF32</a>, <a href='undocumented#SkTextEncoding::kGlyphID'>SkTextEncoding::kGlyphID</a>
 
 ### Return Value
 
@@ -1051,7 +1051,7 @@ number of <a href='undocumented#Glyph'>glyphs</a> represented by <a href='#SkFon
 
 ### Example
 
-<div><fiddle-embed name="882e8e0103048009a25cfc20400492f7"></fiddle-embed></div>
+<div><fiddle-embed name="@incomplete"></fiddle-embed></div>
 
 ### See Also
 
@@ -1069,7 +1069,7 @@ Returns true if all <a href='#SkFont_containsText_text'>text</a> corresponds to 
 Returns false if any characters in <a href='#SkFont_containsText_text'>text</a> are not supported in
 <a href='undocumented#SkTypeface'>SkTypeface</a>.
 
-If <a href='undocumented#SkTextEncoding'>SkTextEncoding</a> is <a href='undocumented#kGlyphID_SkTextEncoding'>kGlyphID_SkTextEncoding</a>,
+If <a href='undocumented#SkTextEncoding'>SkTextEncoding</a> is <a href='undocumented#SkTextEncoding::kGlyphID'>SkTextEncoding::kGlyphID</a>,
 returns true if all <a href='undocumented#Glyph'>glyph</a> indices in <a href='#SkFont_containsText_text'>text</a> are non-zero;
 does not check to see if <a href='#SkFont_containsText_text'>text</a> contains valid <a href='undocumented#Glyph'>glyph</a> indices for <a href='undocumented#SkTypeface'>SkTypeface</a>.
 
@@ -1094,7 +1094,7 @@ true if all <a href='#SkFont_containsText_text'>text</a> corresponds to a non-ze
 
 ### Example
 
-<div><fiddle-embed name="882e8e0103048009a25cfc20400492f7"></fiddle-embed></div>
+<div><fiddle-embed name="@incomplete"></fiddle-embed></div>
 
 ### See Also
 
@@ -1172,11 +1172,11 @@ Returns the bounding box of <a href='#SkFont_measureText_text'>text</a> if <a hr
     <td>length of character storage in bytes</td>
   </tr>
   <tr>    <td><a name='SkFont_measureText_encoding'><code><strong>encoding</strong></code></a></td>
-    <td>one of: <a href='undocumented#kUTF8_SkTextEncoding'>kUTF8_SkTextEncoding</a>, <a href='undocumented#kUTF16_SkTextEncoding'>kUTF16_SkTextEncoding</a>,</td>
+    <td>one of: <a href='undocumented#SkTextEncoding::kUTF8'>SkTextEncoding::kUTF8</a>, <a href='undocumented#SkTextEncoding::kUTF16'>SkTextEncoding::kUTF16</a>,</td>
   </tr>
 </table>
 
-<a href='undocumented#kUTF32_SkTextEncoding'>kUTF32_SkTextEncoding</a>, <a href='undocumented#kGlyphID_SkTextEncoding'>kGlyphID_SkTextEncoding</a>
+<a href='undocumented#SkTextEncoding::kUTF32'>SkTextEncoding::kUTF32</a>, <a href='undocumented#SkTextEncoding::kGlyphID'>SkTextEncoding::kGlyphID</a>
 
 ### Parameters
 
@@ -1191,7 +1191,7 @@ number of <a href='undocumented#Glyph'>glyphs</a> represented by <a href='#SkFon
 
 ### Example
 
-<div><fiddle-embed name="882e8e0103048009a25cfc20400492f7"></fiddle-embed></div>
+<div><fiddle-embed name="@incomplete"></fiddle-embed></div>
 
 ### See Also
 
@@ -1226,7 +1226,7 @@ true if <a href='#SkFont_getPath_glyphID'>glyphID</a> is described by <a href='#
 
 ### Example
 
-<div><fiddle-embed name="882e8e0103048009a25cfc20400492f7"></fiddle-embed></div>
+<div><fiddle-embed name="@incomplete"></fiddle-embed></div>
 
 ### See Also
 
@@ -1261,7 +1261,7 @@ Returns <a href='SkPath_Reference#Path'>path</a> corresponding to <a href='undoc
 
 ### Example
 
-<div><fiddle-embed name="882e8e0103048009a25cfc20400492f7"></fiddle-embed></div>
+<div><fiddle-embed name="@incomplete"></fiddle-embed></div>
 
 ### See Also
 
@@ -1296,7 +1296,7 @@ recommended spacing between <a href='undocumented#Line'>lines</a>
 
 ### Example
 
-<div><fiddle-embed name="882e8e0103048009a25cfc20400492f7"></fiddle-embed></div>
+<div><fiddle-embed name="@incomplete"></fiddle-embed></div>
 
 ### See Also
 
@@ -1322,7 +1322,7 @@ recommended spacing between <a href='undocumented#Line'>lines</a>
 
 ### Example
 
-<div><fiddle-embed name="882e8e0103048009a25cfc20400492f7"></fiddle-embed></div>
+<div><fiddle-embed name="@incomplete"></fiddle-embed></div>
 
 ### See Also
 

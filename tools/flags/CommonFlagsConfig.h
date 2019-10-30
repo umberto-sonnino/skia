@@ -8,8 +8,8 @@
 #ifndef SK_COMMON_FLAGS_CONFIG_H
 #define SK_COMMON_FLAGS_CONFIG_H
 
-#include "CommandLineFlags.h"
-#include "GrContextFactory.h"
+#include "tools/flags/CommandLineFlags.h"
+#include "tools/gpu/GrContextFactory.h"
 
 DECLARE_string(config);
 
@@ -54,7 +54,6 @@ public:
     SkCommandLineConfigGpu(const SkString&           tag,
                            const SkTArray<SkString>& viaParts,
                            ContextType               contextType,
-                           bool                      useNVPR,
                            bool                      useDIText,
                            int                       samples,
                            SkColorType               colorType,
@@ -63,16 +62,12 @@ public:
                            bool                      useStencilBuffers,
                            bool                      testThreading,
                            int                       testPersistentCache,
+                           bool                      testPrecompile,
                            SurfType);
 
     const SkCommandLineConfigGpu* asConfigGpu() const override { return this; }
     ContextType                   getContextType() const { return fContextType; }
     ContextOverrides              getContextOverrides() const { return fContextOverrides; }
-    bool                          getUseNVPR() const {
-        SkASSERT(!(fContextOverrides & ContextOverrides::kRequireNVPRSupport) ||
-                 !(fContextOverrides & ContextOverrides::kDisableNVPR));
-        return fContextOverrides & ContextOverrides::kRequireNVPRSupport;
-    }
     bool          getUseDIText() const { return fUseDIText; }
     int           getSamples() const { return fSamples; }
     SkColorType   getColorType() const { return fColorType; }
@@ -80,6 +75,7 @@ public:
     SkColorSpace* getColorSpace() const { return fColorSpace.get(); }
     bool          getTestThreading() const { return fTestThreading; }
     int           getTestPersistentCache() const { return fTestPersistentCache; }
+    bool          getTestPrecompile() const { return fTestPrecompile; }
     SurfType      getSurfType() const { return fSurfType; }
 
 private:
@@ -92,6 +88,7 @@ private:
     sk_sp<SkColorSpace> fColorSpace;
     bool                fTestThreading;
     int                 fTestPersistentCache;
+    bool                fTestPrecompile;
     SurfType            fSurfType;
 };
 

@@ -5,14 +5,14 @@
  * found in the LICENSE file.
  */
 
-#include "SkArenaAlloc.h"
-#include "SkColorShader.h"
-#include "SkColorSpace.h"
-#include "SkColorSpacePriv.h"
-#include "SkColorSpaceXformSteps.h"
-#include "SkRasterPipeline.h"
-#include "SkReadBuffer.h"
-#include "SkUtils.h"
+#include "include/core/SkColorSpace.h"
+#include "src/core/SkArenaAlloc.h"
+#include "src/core/SkColorSpacePriv.h"
+#include "src/core/SkColorSpaceXformSteps.h"
+#include "src/core/SkRasterPipeline.h"
+#include "src/core/SkReadBuffer.h"
+#include "src/core/SkUtils.h"
+#include "src/shaders/SkColorShader.h"
 
 SkColorShader::SkColorShader(SkColor c) : fColor(c) {}
 
@@ -90,23 +90,60 @@ bool SkColor4Shader::onAppendStages(const SkStageRec& rec) const {
     return true;
 }
 
+bool SkColorShader::program(skvm::Builder* p,
+                            SkColorSpace* dstCS,
+                            skvm::Arg uniforms, int offset,
+                            skvm::I32* r, skvm::I32* g, skvm::I32* b, skvm::I32* a) const {
+
+    SkColor4f color = SkColor4f::FromColor(fColor);
+    SkColorSpaceXformSteps(sk_srgb_singleton(), kUnpremul_SkAlphaType,
+                           dstCS,               kUnpremul_SkAlphaType).apply(color.vec());
+
+    if (color.fitsInBytes()) {
+        if (p) {
+            skvm::I32 rgba = p->uniform32(uniforms, offset);
+            *r = p->extract(rgba,  0, p->splat(0xff));
+            *g = p->extract(rgba,  8, p->splat(0xff));
+            *b = p->extract(rgba, 16, p->splat(0xff));
+            *a = p->extract(rgba, 24, p->splat(0xff));
+        }
+        return true;
+    }
+    return false;
+}
+
+size_t SkColorShader::uniforms(SkColorSpace* dstCS, uint8_t* uniform_buffer) const {
+    SkColor4f color = SkColor4f::FromColor(fColor);
+    SkColorSpaceXformSteps(sk_srgb_singleton(), kUnpremul_SkAlphaType,
+                           dstCS,               kUnpremul_SkAlphaType).apply(color.vec());
+
+    SkASSERT(color.fitsInBytes());
+
+    uint32_t rgba = color.premul().toBytes_RGBA();
+    if (uniform_buffer) {
+        memcpy(uniform_buffer, &rgba, sizeof(rgba));
+    }
+    return sizeof(rgba);
+}
+
+
 #if SK_SUPPORT_GPU
 
-#include "GrColorSpaceInfo.h"
-#include "GrColorSpaceXform.h"
-#include "SkGr.h"
-#include "effects/generated/GrConstColorProcessor.h"
+#include "src/gpu/GrColorInfo.h"
+#include "src/gpu/GrColorSpaceXform.h"
+#include "src/gpu/SkGr.h"
+#include "src/gpu/effects/generated/GrConstColorProcessor.h"
 
 std::unique_ptr<GrFragmentProcessor> SkColorShader::asFragmentProcessor(
         const GrFPArgs& args) const {
-    SkPMColor4f color = SkColorToPMColor4f(fColor, *args.fDstColorSpaceInfo);
+    SkPMColor4f color = SkColorToPMColor4f(fColor, *args.fDstColorInfo);
     return GrConstColorProcessor::Make(color, GrConstColorProcessor::InputMode::kModulateA);
 }
 
 std::unique_ptr<GrFragmentProcessor> SkColor4Shader::asFragmentProcessor(
         const GrFPArgs& args) const {
-    SkColorSpaceXformSteps steps{ fColorSpace.get(),                     kUnpremul_SkAlphaType,
-                                  args.fDstColorSpaceInfo->colorSpace(), kUnpremul_SkAlphaType };
+    SkColorSpaceXformSteps steps{ fColorSpace.get(),                kUnpremul_SkAlphaType,
+                                  args.fDstColorInfo->colorSpace(), kUnpremul_SkAlphaType };
     SkColor4f color = fColor;
     steps.apply(color.vec());
     return GrConstColorProcessor::Make(color.premul(),

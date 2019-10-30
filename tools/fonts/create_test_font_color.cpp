@@ -8,11 +8,11 @@
 // running create_test_font_color generates ./<cbdt|sbix|cpal>.ttx
 // which are read by fonttools ttx to produce native fonts.
 
-#include "CommandLineFlags.h"
-#include "SkRefCnt.h"
-#include "SkStream.h"
-#include "SkString.h"
-#include "TestSVGTypeface.h"
+#include "include/core/SkRefCnt.h"
+#include "include/core/SkStream.h"
+#include "include/core/SkString.h"
+#include "tools/flags/CommandLineFlags.h"
+#include "tools/fonts/TestSVGTypeface.h"
 
 static void export_ttx(sk_sp<TestSVGTypeface> typeface,
                        SkString               prefix,
@@ -43,8 +43,9 @@ int main(int argc, char** argv) {
     // But the planet font cannot get very big in the size limited cbdt format.
     unsigned small[] = { 8, 16 };
 
-    export_ttx(TestSVGTypeface::Default(), SkString(), usual, usual);
-    export_ttx(TestSVGTypeface::Planets(), SkString("planet"), small, usual);
+    export_ttx(TestSVGTypeface::Default(), SkString(), SkMakeSpan(usual), SkMakeSpan(usual));
+    export_ttx(
+            TestSVGTypeface::Planets(), SkString("planet"), SkMakeSpan(small), SkMakeSpan(usual));
 
     return 0;
 }

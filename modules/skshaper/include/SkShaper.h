@@ -8,11 +8,12 @@
 #ifndef SkShaper_DEFINED
 #define SkShaper_DEFINED
 
-#include "SkPoint.h"
-#include "SkRefCnt.h"
-#include "SkScalar.h"
-#include "SkTextBlob.h"
-#include "SkTypes.h"
+#include "include/core/SkFontMgr.h"
+#include "include/core/SkPoint.h"
+#include "include/core/SkRefCnt.h"
+#include "include/core/SkScalar.h"
+#include "include/core/SkTextBlob.h"
+#include "include/core/SkTypes.h"
 
 #include <memory>
 
@@ -29,11 +30,12 @@ class SkShaper {
 public:
     static std::unique_ptr<SkShaper> MakePrimitive();
     #ifdef SK_SHAPER_HARFBUZZ_AVAILABLE
-    static std::unique_ptr<SkShaper> MakeShaperDrivenWrapper();
-    static std::unique_ptr<SkShaper> MakeShapeThenWrap();
+    static std::unique_ptr<SkShaper> MakeShaperDrivenWrapper(sk_sp<SkFontMgr> = nullptr);
+    static std::unique_ptr<SkShaper> MakeShapeThenWrap(sk_sp<SkFontMgr> = nullptr);
+    static std::unique_ptr<SkShaper> MakeShapeDontWrapOrReorder(sk_sp<SkFontMgr> = nullptr);
     #endif
 
-    static std::unique_ptr<SkShaper> Make();
+    static std::unique_ptr<SkShaper> Make(sk_sp<SkFontMgr> = nullptr);
 
     SkShaper();
     virtual ~SkShaper();
@@ -48,42 +50,98 @@ public:
         /** Return true if consume should no longer be called. */
         virtual bool atEnd() const = 0;
     };
-
     class FontRunIterator : public RunIterator {
     public:
         virtual const SkFont& currentFont() const = 0;
     };
-    static std::unique_ptr<FontRunIterator>
-    MakeFontMgrRunIterator(const char* utf8, size_t utf8Bytes,
-                           const SkFont& font, sk_sp<SkFontMgr> fallback);
-
     class BiDiRunIterator : public RunIterator {
     public:
         /** The unicode bidi embedding level (even ltr, odd rtl) */
         virtual uint8_t currentLevel() const = 0;
     };
-    #ifdef SK_SHAPER_HARFBUZZ_AVAILABLE
-    static std::unique_ptr<SkShaper::BiDiRunIterator>
-    MakeIcuBiDiRunIterator(const char* utf8, size_t utf8Bytes, uint8_t bidiLevel);
-    #endif
-
     class ScriptRunIterator : public RunIterator {
     public:
         /** Should be iso15924 codes. */
         virtual SkFourByteTag currentScript() const = 0;
     };
-    #ifdef SK_SHAPER_HARFBUZZ_AVAILABLE
-    static std::unique_ptr<SkShaper::ScriptRunIterator>
-    MakeHbIcuScriptRunIterator(const char* utf8, size_t utf8Bytes);
-    #endif
-
     class LanguageRunIterator : public RunIterator {
     public:
         /** Should be BCP-47, c locale names may also work. */
         virtual const char* currentLanguage() const = 0;
     };
-    static std::unique_ptr<SkShaper::LanguageRunIterator>
+
+private:
+    template <typename RunIteratorSubclass>
+    class TrivialRunIterator : public RunIteratorSubclass {
+    public:
+        static_assert(std::is_base_of<RunIterator, RunIteratorSubclass>::value, "");
+        TrivialRunIterator(size_t utf8Bytes) : fEnd(utf8Bytes), fAtEnd(false) {}
+        void consume() override { fAtEnd = true; }
+        size_t endOfCurrentRun() const override { return fAtEnd ? fEnd : 0; }
+        bool atEnd() const override { return fAtEnd; }
+    private:
+        size_t fEnd;
+        bool fAtEnd;
+    };
+
+public:
+    static std::unique_ptr<FontRunIterator>
+    MakeFontMgrRunIterator(const char* utf8, size_t utf8Bytes,
+                           const SkFont& font, sk_sp<SkFontMgr> fallback);
+    static std::unique_ptr<SkShaper::FontRunIterator>
+    MakeFontMgrRunIterator(const char* utf8, size_t utf8Bytes,
+                           const SkFont& font, sk_sp<SkFontMgr> fallback,
+                           const char* requestName, SkFontStyle requestStyle,
+                           const SkShaper::LanguageRunIterator*);
+    class TrivialFontRunIterator : public TrivialRunIterator<FontRunIterator> {
+    public:
+        TrivialFontRunIterator(const SkFont& font, size_t utf8Bytes)
+            : TrivialRunIterator(utf8Bytes), fFont(font) {}
+        const SkFont& currentFont() const override { return fFont; }
+    private:
+        SkFont fFont;
+    };
+
+    static std::unique_ptr<BiDiRunIterator>
+    MakeBiDiRunIterator(const char* utf8, size_t utf8Bytes, uint8_t bidiLevel);
+    #ifdef SK_SHAPER_HARFBUZZ_AVAILABLE
+    static std::unique_ptr<BiDiRunIterator>
+    MakeIcuBiDiRunIterator(const char* utf8, size_t utf8Bytes, uint8_t bidiLevel);
+    #endif
+    class TrivialBiDiRunIterator : public TrivialRunIterator<BiDiRunIterator> {
+    public:
+        TrivialBiDiRunIterator(uint8_t bidiLevel, size_t utf8Bytes)
+            : TrivialRunIterator(utf8Bytes), fBidiLevel(bidiLevel) {}
+        uint8_t currentLevel() const override { return fBidiLevel; }
+    private:
+        uint8_t fBidiLevel;
+    };
+
+    static std::unique_ptr<ScriptRunIterator>
+    MakeScriptRunIterator(const char* utf8, size_t utf8Bytes, SkFourByteTag script);
+    #ifdef SK_SHAPER_HARFBUZZ_AVAILABLE
+    static std::unique_ptr<ScriptRunIterator>
+    MakeHbIcuScriptRunIterator(const char* utf8, size_t utf8Bytes);
+    #endif
+    class TrivialScriptRunIterator : public TrivialRunIterator<ScriptRunIterator> {
+    public:
+        TrivialScriptRunIterator(SkFourByteTag script, size_t utf8Bytes)
+            : TrivialRunIterator(utf8Bytes), fScript(script) {}
+        SkFourByteTag currentScript() const override { return fScript; }
+    private:
+        SkFourByteTag fScript;
+    };
+
+    static std::unique_ptr<LanguageRunIterator>
     MakeStdLanguageRunIterator(const char* utf8, size_t utf8Bytes);
+    class TrivialLanguageRunIterator : public TrivialRunIterator<LanguageRunIterator> {
+    public:
+        TrivialLanguageRunIterator(const char* language, size_t utf8Bytes)
+            : TrivialRunIterator(utf8Bytes), fLanguage(language) {}
+        const char* currentLanguage() const override { return fLanguage.c_str(); }
+    private:
+        SkString fLanguage;
+    };
 
     class RunHandler {
     public:
@@ -109,10 +167,11 @@ public:
 
         struct Buffer {
             SkGlyphID* glyphs;  // required
-            SkPoint* positions; // required
-            SkPoint* offsets;   // optional
-            uint32_t* clusters; // optional
-            SkPoint point;
+            SkPoint* positions; // required, if (!offsets) put glyphs[i] at positions[i]
+                                //           if ( offsets) positions[i+1]-positions[i] are advances
+            SkPoint* offsets;   // optional, if ( offsets) put glyphs[i] at positions[i]+offsets[i]
+            uint32_t* clusters; // optional, utf8+clusters[i] starts run which produced glyphs[i]
+            SkPoint point;      // offset to add to all positions
         };
 
         /** Called when beginning a line. */

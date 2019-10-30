@@ -5,32 +5,32 @@
  * found in the LICENSE file.
  */
 
-#include "skqp.h"
+#include "tools/skqp/src/skqp.h"
 
-#include "../../../src/core/SkStreamPriv.h"
-#include "../../tools/fonts/TestFontMgr.h"
-#include "GrContext.h"
-#include "GrContextOptions.h"
-#include "GrContextPriv.h"
-#include "SkFontMgrPriv.h"
-#include "SkFontStyle.h"
-#include "SkGraphics.h"
-#include "SkImageInfoPriv.h"
-#include "SkOSFile.h"
-#include "SkOSPath.h"
-#include "SkPngEncoder.h"
-#include "SkStream.h"
-#include "SkSurface.h"
-#include "Test.h"
-#include "gl/GLTestContext.h"
-#include "gm.h"
-#include "vk/VkTestContext.h"
+#include "gm/gm.h"
+#include "include/core/SkFontStyle.h"
+#include "include/core/SkGraphics.h"
+#include "include/core/SkStream.h"
+#include "include/core/SkSurface.h"
+#include "include/encode/SkPngEncoder.h"
+#include "include/gpu/GrContext.h"
+#include "include/gpu/GrContextOptions.h"
+#include "include/private/SkImageInfoPriv.h"
+#include "src/core/SkFontMgrPriv.h"
+#include "src/core/SkOSFile.h"
+#include "src/core/SkStreamPriv.h"
+#include "src/utils/SkOSPath.h"
+#include "tests/Test.h"
+#include "tools/fonts/TestFontMgr.h"
+#include "tools/gpu/gl/GLTestContext.h"
+#include "tools/gpu/vk/VkTestContext.h"
 
+#include <limits.h>
 #include <algorithm>
 #include <cinttypes>
 #include <sstream>
 
-#include "skqp_model.h"
+#include "tools/skqp/src/skqp_model.h"
 
 #define IMAGES_DIRECTORY_PATH "images"
 #define PATH_MAX_PNG "max.png"
@@ -135,10 +135,13 @@ static void get_render_tests(SkQPAssetManager* mgr,
 static std::unique_ptr<sk_gpu_test::TestContext> make_test_context(SkQP::SkiaBackend backend) {
     using U = std::unique_ptr<sk_gpu_test::TestContext>;
     switch (backend) {
+// TODO(halcanary): Fuchsia will have SK_SUPPORT_GPU and SK_VULKAN, but *not* SK_GL.
+#ifdef SK_GL
         case SkQP::SkiaBackend::kGL:
             return U(sk_gpu_test::CreatePlatformGLTestContext(kGL_GrGLStandard, nullptr));
         case SkQP::SkiaBackend::kGLES:
             return U(sk_gpu_test::CreatePlatformGLTestContext(kGLES_GrGLStandard, nullptr));
+#endif
 #ifdef SK_VULKAN
         case SkQP::SkiaBackend::kVulkan:
             return U(sk_gpu_test::CreatePlatformVkTestContext(nullptr));
@@ -151,7 +154,6 @@ static std::unique_ptr<sk_gpu_test::TestContext> make_test_context(SkQP::SkiaBac
 static GrContextOptions context_options(skiagm::GM* gm = nullptr) {
     GrContextOptions grContextOptions;
     grContextOptions.fAllowPathMaskCaching = true;
-    grContextOptions.fSuppressPathRendering = true;
     grContextOptions.fDisableDriverCorrectnessWorkarounds = true;
     if (gm) {
         gm->modifyGrContextOptions(&grContextOptions);
@@ -162,10 +164,12 @@ static GrContextOptions context_options(skiagm::GM* gm = nullptr) {
 static std::vector<SkQP::SkiaBackend> get_backends() {
     std::vector<SkQP::SkiaBackend> result;
     SkQP::SkiaBackend backends[] = {
+        #ifdef SK_GL
         #ifndef SK_BUILD_FOR_ANDROID
         SkQP::SkiaBackend::kGL,  // Used for testing on desktop machines.
         #endif
         SkQP::SkiaBackend::kGLES,
+        #endif  // SK_GL
         #ifdef SK_VULKAN
         SkQP::SkiaBackend::kVulkan,
         #endif
@@ -192,7 +196,7 @@ static void print_backend_info(const char* dstPath,
         if (std::unique_ptr<sk_gpu_test::TestContext> testCtx = make_test_context(backend)) {
             testCtx->makeCurrent();
             if (sk_sp<GrContext> ctx = testCtx->makeGrContext(context_options())) {
-                SkString info = ctx->priv().dump();
+                SkString info = ctx->dump();
                 // remove null
                 out.write(info.c_str(), info.size());
                 out.writeText(",\n");
@@ -228,7 +232,7 @@ const char* SkQP::GetBackendName(SkQP::SkiaBackend b) {
 }
 
 std::string SkQP::GetGMName(SkQP::GMFactory f) {
-    std::unique_ptr<skiagm::GM> gm(f ? f(nullptr) : nullptr);
+    std::unique_ptr<skiagm::GM> gm(f ? f() : nullptr);
     return std::string(gm ? gm->getName() : "");
 }
 
@@ -271,7 +275,7 @@ std::tuple<SkQP::RenderOutcome, std::string> SkQP::evaluateGM(SkQP::SkiaBackend 
     testCtx->makeCurrent();
 
     SkASSERT(gmFact);
-    std::unique_ptr<skiagm::GM> gm(gmFact(nullptr));
+    std::unique_ptr<skiagm::GM> gm(gmFact());
     SkASSERT(gm);
     const char* const name = gm->getName();
     const SkISize size = gm->getISize();

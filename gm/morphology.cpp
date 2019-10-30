@@ -5,9 +5,20 @@
  * found in the LICENSE file.
  */
 
-#include "SkMorphologyImageFilter.h"
-#include "ToolUtils.h"
-#include "gm.h"
+#include "gm/gm.h"
+#include "include/core/SkBitmap.h"
+#include "include/core/SkCanvas.h"
+#include "include/core/SkFont.h"
+#include "include/core/SkImageFilter.h"
+#include "include/core/SkPaint.h"
+#include "include/core/SkRect.h"
+#include "include/core/SkScalar.h"
+#include "include/core/SkSize.h"
+#include "include/core/SkString.h"
+#include "include/core/SkTypeface.h"
+#include "include/core/SkTypes.h"
+#include "include/effects/SkImageFilters.h"
+#include "tools/ToolUtils.h"
 
 #define WIDTH 700
 #define HEIGHT 560
@@ -62,21 +73,17 @@ protected:
             {  24,  24,  25,  25 },
         };
         SkPaint paint;
-        SkImageFilter::CropRect cropRect(SkRect::MakeXYWH(25, 20, 100, 80));
+        SkIRect cropRect = SkIRect::MakeXYWH(25, 20, 100, 80);
 
         for (unsigned j = 0; j < 4; ++j) {
             for (unsigned i = 0; i < SK_ARRAY_COUNT(samples); ++i) {
-                const SkImageFilter::CropRect* cr = j & 0x02 ? &cropRect : nullptr;
+                const SkIRect* cr = j & 0x02 ? &cropRect : nullptr;
                 if (j & 0x01) {
-                    paint.setImageFilter(SkErodeImageFilter::Make(samples[i].fRadiusX,
-                                                                  samples[i].fRadiusY,
-                                                                  nullptr,
-                                                                  cr));
+                    paint.setImageFilter(SkImageFilters::Erode(
+                            samples[i].fRadiusX, samples[i].fRadiusY, nullptr, cr));
                 } else {
-                    paint.setImageFilter(SkDilateImageFilter::Make(samples[i].fRadiusX,
-                                                                   samples[i].fRadiusY,
-                                                                   nullptr,
-                                                                   cr));
+                    paint.setImageFilter(SkImageFilters::Dilate(
+                            samples[i].fRadiusX, samples[i].fRadiusY, nullptr, cr));
                 }
                 this->drawClippedBitmap(canvas, paint, i * 140, j * 140);
             }

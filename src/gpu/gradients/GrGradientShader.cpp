@@ -5,28 +5,28 @@
  * found in the LICENSE file.
  */
 
-#include "GrGradientShader.h"
+#include "src/gpu/gradients/GrGradientShader.h"
 
-#include "generated/GrClampedGradientEffect.h"
-#include "generated/GrTiledGradientEffect.h"
+#include "src/gpu/gradients/generated/GrClampedGradientEffect.h"
+#include "src/gpu/gradients/generated/GrTiledGradientEffect.h"
 
-#include "generated/GrLinearGradientLayout.h"
-#include "generated/GrRadialGradientLayout.h"
-#include "generated/GrSweepGradientLayout.h"
-#include "generated/GrTwoPointConicalGradientLayout.h"
+#include "src/gpu/gradients/generated/GrLinearGradientLayout.h"
+#include "src/gpu/gradients/generated/GrRadialGradientLayout.h"
+#include "src/gpu/gradients/generated/GrSweepGradientLayout.h"
+#include "src/gpu/gradients/generated/GrTwoPointConicalGradientLayout.h"
 
-#include "generated/GrDualIntervalGradientColorizer.h"
-#include "generated/GrSingleIntervalGradientColorizer.h"
-#include "generated/GrTextureGradientColorizer.h"
-#include "generated/GrUnrolledBinaryGradientColorizer.h"
-#include "GrGradientBitmapCache.h"
+#include "src/gpu/gradients/GrGradientBitmapCache.h"
+#include "src/gpu/gradients/generated/GrDualIntervalGradientColorizer.h"
+#include "src/gpu/gradients/generated/GrSingleIntervalGradientColorizer.h"
+#include "src/gpu/gradients/generated/GrTextureGradientColorizer.h"
+#include "src/gpu/gradients/generated/GrUnrolledBinaryGradientColorizer.h"
 
-#include "GrCaps.h"
-#include "GrColor.h"
-#include "GrColorSpaceInfo.h"
-#include "GrRecordingContext.h"
-#include "GrRecordingContextPriv.h"
-#include "SkGr.h"
+#include "include/private/GrRecordingContext.h"
+#include "src/gpu/GrCaps.h"
+#include "src/gpu/GrColor.h"
+#include "src/gpu/GrColorInfo.h"
+#include "src/gpu/GrRecordingContextPriv.h"
+#include "src/gpu/SkGr.h"
 
 // Intervals smaller than this (that aren't hard stops) on low-precision-only devices force us to
 // use the textured gradient
@@ -45,9 +45,12 @@ static std::unique_ptr<GrFragmentProcessor> make_textured_colorizer(const SkPMCo
     // Use 8888 or F16, depending on the destination config.
     // TODO: Use 1010102 for opaque gradients, at least if destination is 1010102?
     SkColorType colorType = kRGBA_8888_SkColorType;
-    if (kLow_GrSLPrecision != GrSLSamplerPrecision(args.fDstColorSpaceInfo->config()) &&
-        args.fContext->priv().caps()->isConfigTexturable(kRGBA_half_GrPixelConfig)) {
-        colorType = kRGBA_F16_SkColorType;
+    if (GrColorTypeIsWiderThan(args.fDstColorInfo->colorType(), 8)) {
+        auto f16Format = args.fContext->priv().caps()->getDefaultBackendFormat(
+                GrColorType::kRGBA_F16, GrRenderable::kNo);
+        if (f16Format.isValid()) {
+            colorType = kRGBA_F16_SkColorType;
+        }
     }
     SkAlphaType alphaType = premul ? kPremul_SkAlphaType : kUnpremul_SkAlphaType;
 
@@ -164,7 +167,7 @@ static std::unique_ptr<GrFragmentProcessor> make_gradient(const SkGradientShader
     bool allOpaque = true;
     SkAutoSTMalloc<4, SkPMColor4f> colors(shader.fColorCount);
     SkColor4fXformer xformedColors(shader.fOrigColors4f, shader.fColorCount,
-            shader.fColorSpace.get(), args.fDstColorSpaceInfo->colorSpace());
+                                   shader.fColorSpace.get(), args.fDstColorInfo->colorSpace());
     for (int i = 0; i < shader.fColorCount; i++) {
         const SkColor4f& upmColor = xformedColors.fColors[i];
         colors[i] = inputPremul ? upmColor.premul()
@@ -236,7 +239,9 @@ static std::unique_ptr<GrFragmentProcessor> make_gradient(const SkGradientShader
         // Unexpected tile mode
         return nullptr;
     }
-
+    if (args.fInputColorIsOpaque) {
+        return GrFragmentProcessor::OverrideInput(std::move(master), SK_PMColor4fWHITE, false);
+    }
     return GrFragmentProcessor::MulChildByInputAlpha(std::move(master));
 }
 

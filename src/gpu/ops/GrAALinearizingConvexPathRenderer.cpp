@@ -5,26 +5,27 @@
  * found in the LICENSE file.
  */
 
-#include "GrAALinearizingConvexPathRenderer.h"
-#include "GrAAConvexTessellator.h"
-#include "GrCaps.h"
-#include "GrDefaultGeoProcFactory.h"
-#include "GrDrawOpTest.h"
-#include "GrGeometryProcessor.h"
-#include "GrOpFlushState.h"
-#include "GrPathUtils.h"
-#include "GrProcessor.h"
-#include "GrRenderTargetContext.h"
-#include "GrShape.h"
-#include "GrStyle.h"
-#include "GrVertexWriter.h"
-#include "SkGeometry.h"
-#include "SkPathPriv.h"
-#include "SkString.h"
-#include "SkTraceEvent.h"
-#include "glsl/GrGLSLGeometryProcessor.h"
-#include "ops/GrMeshDrawOp.h"
-#include "ops/GrSimpleMeshDrawOpHelper.h"
+#include "include/core/SkString.h"
+#include "src/core/SkGeometry.h"
+#include "src/core/SkPathPriv.h"
+#include "src/core/SkTraceEvent.h"
+#include "src/gpu/GrAuditTrail.h"
+#include "src/gpu/GrCaps.h"
+#include "src/gpu/GrDefaultGeoProcFactory.h"
+#include "src/gpu/GrDrawOpTest.h"
+#include "src/gpu/GrGeometryProcessor.h"
+#include "src/gpu/GrOpFlushState.h"
+#include "src/gpu/GrProcessor.h"
+#include "src/gpu/GrRenderTargetContext.h"
+#include "src/gpu/GrStyle.h"
+#include "src/gpu/GrVertexWriter.h"
+#include "src/gpu/geometry/GrPathUtils.h"
+#include "src/gpu/geometry/GrShape.h"
+#include "src/gpu/glsl/GrGLSLGeometryProcessor.h"
+#include "src/gpu/ops/GrAAConvexTessellator.h"
+#include "src/gpu/ops/GrAALinearizingConvexPathRenderer.h"
+#include "src/gpu/ops/GrMeshDrawOp.h"
+#include "src/gpu/ops/GrSimpleMeshDrawOpHelper.h"
 
 static const int DEFAULT_BUFFER_SIZE = 100;
 
@@ -39,7 +40,7 @@ GrAALinearizingConvexPathRenderer::GrAALinearizingConvexPathRenderer() {
 
 GrPathRenderer::CanDrawPath
 GrAALinearizingConvexPathRenderer::onCanDrawPath(const CanDrawPathArgs& args) const {
-    if (!(AATypeFlags::kCoverage & args.fAATypeFlags)) {
+    if (GrAAType::kCoverage != args.fAAType) {
         return CanDrawPath::kNo;
     }
     if (!args.fShape->knownToBeConvex()) {
@@ -153,18 +154,20 @@ public:
         SkScalar w = strokeWidth;
         if (w > 0) {
             w /= 2;
-            // If the half stroke width is < 1 then we effectively fallback to bevel joins.
-            if (SkPaint::kMiter_Join == join && w > 1.f) {
+            SkScalar maxScale = viewMatrix.getMaxScale();
+            // We should not have a perspective matrix, thus we should have a valid scale.
+            SkASSERT(maxScale != -1);
+            if (SkPaint::kMiter_Join == join && w * maxScale > 1.f) {
                 w *= miterLimit;
             }
             bounds.outset(w, w);
         }
-        this->setTransformedBounds(bounds, viewMatrix, HasAABloat::kYes, IsZeroArea::kNo);
+        this->setTransformedBounds(bounds, viewMatrix, HasAABloat::kYes, IsHairline::kNo);
     }
 
     const char* name() const override { return "AAFlatteningConvexPathOp"; }
 
-    void visitProxies(const VisitProxyFunc& func, VisitorType) const override {
+    void visitProxies(const VisitProxyFunc& func) const override {
         fHelper.visitProxies(func);
     }
 
@@ -186,11 +189,12 @@ public:
 
     FixedFunctionFlags fixedFunctionFlags() const override { return fHelper.fixedFunctionFlags(); }
 
-    GrProcessorSet::Analysis finalize(const GrCaps& caps, const GrAppliedClip* clip,
-                                      GrFSAAType fsaaType, GrClampType clampType) override {
+    GrProcessorSet::Analysis finalize(
+            const GrCaps& caps, const GrAppliedClip* clip, bool hasMixedSampledCoverage,
+            GrClampType clampType) override {
         return fHelper.finalizeProcessors(
-                caps, clip, fsaaType, clampType, GrProcessorAnalysisCoverage::kSingleChannel,
-                &fPaths.back().fColor, &fWideColor);
+                caps, clip, hasMixedSampledCoverage, clampType,
+                GrProcessorAnalysisCoverage::kSingleChannel, &fPaths.back().fColor, &fWideColor);
     }
 
 private:
@@ -336,7 +340,7 @@ private:
 bool GrAALinearizingConvexPathRenderer::onDrawPath(const DrawPathArgs& args) {
     GR_AUDIT_TRAIL_AUTO_FRAME(args.fRenderTargetContext->auditTrail(),
                               "GrAALinearizingConvexPathRenderer::onDrawPath");
-    SkASSERT(GrFSAAType::kUnifiedMSAA != args.fRenderTargetContext->fsaaType());
+    SkASSERT(args.fRenderTargetContext->numSamples() <= 1);
     SkASSERT(!args.fShape->isEmpty());
     SkASSERT(!args.fShape->style().pathEffect());
 

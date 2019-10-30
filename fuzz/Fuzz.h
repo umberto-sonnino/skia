@@ -8,12 +8,12 @@
 #ifndef Fuzz_DEFINED
 #define Fuzz_DEFINED
 
-#include "../tools/Registry.h"
-#include "SkData.h"
-#include "SkImageFilter.h"
-#include "SkMalloc.h"
-#include "SkRegion.h"
-#include "SkTypes.h"
+#include "include/core/SkData.h"
+#include "include/core/SkImageFilter.h"
+#include "include/core/SkRegion.h"
+#include "include/core/SkTypes.h"
+#include "include/private/SkMalloc.h"
+#include "tools/Registry.h"
 
 #include <limits>
 #include <cmath>
@@ -58,6 +58,10 @@ public:
     template <typename T, typename Min, typename Max>
     void nextRange(T*, Min, Max);
 
+    // nextEnum is a wrapper around nextRange for enums.
+    template <typename T>
+    void nextEnum(T* ptr, T max);
+
     // nextN loads n * sizeof(T) bytes into ptr
     template <typename T>
     void nextN(T* ptr, int n);
@@ -97,6 +101,19 @@ inline void Fuzz::nextRange(T* value, Min min, Max max) {
     this->next(value);
     if (*value < (T)min) { *value = (T)min; }
     if (*value > (T)max) { *value = (T)max; }
+}
+
+template <typename T>
+inline void Fuzz::nextEnum(T* value, T max) {
+    // This works around the fact that UBSAN will assert if we put an invalid
+    // value into an enum. We might see issues with enums being represented
+    // on Windows differently than Linux, but that's not a thing we can fix here.
+    using U = typename std::underlying_type<T>::type;
+    U v;
+    this->next(&v);
+    if (v < (U)0) { *value = (T)0; return;}
+    if (v > (U)max) { *value = (T)max; return;}
+    *value = (T)v;
 }
 
 template <typename T>

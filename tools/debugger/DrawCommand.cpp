@@ -5,30 +5,30 @@
  * found in the LICENSE file.
  */
 
-#include "DrawCommand.h"
+#include "tools/debugger/DrawCommand.h"
 
 #include <algorithm>
-#include "JsonWriteBuffer.h"
-#include "SkAutoMalloc.h"
-#include "SkCanvasPriv.h"
-#include "SkClipOpPriv.h"
-#include "SkColorFilter.h"
-#include "SkDashPathEffect.h"
-#include "SkDrawable.h"
-#include "SkImageFilter.h"
-#include "SkLatticeIter.h"
-#include "SkMaskFilterBase.h"
-#include "SkPaintDefaults.h"
-#include "SkPathEffect.h"
-#include "SkPicture.h"
-#include "SkPngEncoder.h"
-#include "SkReadBuffer.h"
-#include "SkRectPriv.h"
-#include "SkShadowFlags.h"
-#include "SkTHash.h"
-#include "SkTextBlobPriv.h"
-#include "SkTypeface.h"
-#include "SkWriteBuffer.h"
+#include "include/core/SkColorFilter.h"
+#include "include/core/SkDrawable.h"
+#include "include/core/SkImageFilter.h"
+#include "include/core/SkPathEffect.h"
+#include "include/core/SkPicture.h"
+#include "include/core/SkTypeface.h"
+#include "include/effects/SkDashPathEffect.h"
+#include "include/encode/SkPngEncoder.h"
+#include "include/private/SkShadowFlags.h"
+#include "include/private/SkTHash.h"
+#include "src/core/SkAutoMalloc.h"
+#include "src/core/SkCanvasPriv.h"
+#include "src/core/SkClipOpPriv.h"
+#include "src/core/SkLatticeIter.h"
+#include "src/core/SkMaskFilterBase.h"
+#include "src/core/SkPaintDefaults.h"
+#include "src/core/SkReadBuffer.h"
+#include "src/core/SkRectPriv.h"
+#include "src/core/SkTextBlobPriv.h"
+#include "src/core/SkWriteBuffer.h"
+#include "tools/debugger/JsonWriteBuffer.h"
 
 #define DEBUGCANVAS_ATTRIBUTE_COMMAND "command"
 #define DEBUGCANVAS_ATTRIBUTE_VISIBLE "visible"
@@ -84,7 +84,6 @@
 #define DEBUGCANVAS_ATTRIBUTE_PATHEFFECT "pathEffect"
 #define DEBUGCANVAS_ATTRIBUTE_MASKFILTER "maskFilter"
 #define DEBUGCANVAS_ATTRIBUTE_XFERMODE "xfermode"
-#define DEBUGCANVAS_ATTRIBUTE_LOOPER "looper"
 #define DEBUGCANVAS_ATTRIBUTE_BACKDROP "backdrop"
 #define DEBUGCANVAS_ATTRIBUTE_COLORFILTER "colorfilter"
 #define DEBUGCANVAS_ATTRIBUTE_IMAGEFILTER "imagefilter"
@@ -677,7 +676,7 @@ bool DrawCommand::flatten(const SkImage&  image,
     size_t       rowBytes = 4 * image.width();
     SkAutoMalloc buffer(rowBytes * image.height());
     SkImageInfo  dstInfo =
-            SkImageInfo::Make(image.width(), image.height(), kN32_SkColorType, kPremul_SkAlphaType);
+            SkImageInfo::Make(image.dimensions(), kN32_SkColorType, kPremul_SkAlphaType);
     if (!image.readPixels(dstInfo, buffer.get(), rowBytes, 0, 0)) {
         SkDebugf("readPixels failed\n");
         return false;
@@ -729,16 +728,16 @@ static void apply_font_hinting(const SkFont& font, SkJSONWriter& writer) {
     SkFontHinting hinting = font.getHinting();
     if (hinting != SkPaintDefaults_Hinting) {
         switch (hinting) {
-            case kNo_SkFontHinting:
+            case SkFontHinting::kNone:
                 writer.appendString(DEBUGCANVAS_ATTRIBUTE_HINTING, DEBUGCANVAS_HINTING_NONE);
                 break;
-            case kSlight_SkFontHinting:
+            case SkFontHinting::kSlight:
                 writer.appendString(DEBUGCANVAS_ATTRIBUTE_HINTING, DEBUGCANVAS_HINTING_SLIGHT);
                 break;
-            case kNormal_SkFontHinting:
+            case SkFontHinting::kNormal:
                 writer.appendString(DEBUGCANVAS_ATTRIBUTE_HINTING, DEBUGCANVAS_HINTING_NORMAL);
                 break;
-            case kFull_SkFontHinting:
+            case SkFontHinting::kFull:
                 writer.appendString(DEBUGCANVAS_ATTRIBUTE_HINTING, DEBUGCANVAS_HINTING_FULL);
                 break;
         }
@@ -948,7 +947,6 @@ void DrawCommand::MakeJsonPaint(SkJSONWriter&   writer,
     apply_paint_patheffect(paint, writer, urlDataManager);
     apply_paint_maskfilter(paint, writer, urlDataManager);
     apply_flattenable(DEBUGCANVAS_ATTRIBUTE_SHADER, paint.getShader(), writer, urlDataManager);
-    apply_flattenable(DEBUGCANVAS_ATTRIBUTE_LOOPER, paint.getLooper(), writer, urlDataManager);
     apply_flattenable(
             DEBUGCANVAS_ATTRIBUTE_IMAGEFILTER, paint.getImageFilter(), writer, urlDataManager);
     apply_flattenable(
@@ -1574,6 +1572,26 @@ void DrawPaintCommand::toJSON(SkJSONWriter& writer, UrlDataManager& urlDataManag
     MakeJsonPaint(writer, fPaint, urlDataManager);
 }
 
+DrawBehindCommand::DrawBehindCommand(const SkPaint& paint) : INHERITED(kDrawPaint_OpType) {
+    fPaint = paint;
+}
+
+void DrawBehindCommand::execute(SkCanvas* canvas) const {
+    SkCanvasPriv::DrawBehind(canvas, fPaint);
+}
+
+bool DrawBehindCommand::render(SkCanvas* canvas) const {
+    canvas->clear(0xFFFFFFFF);
+    SkCanvasPriv::DrawBehind(canvas, fPaint);
+    return true;
+}
+
+void DrawBehindCommand::toJSON(SkJSONWriter& writer, UrlDataManager& urlDataManager) const {
+    INHERITED::toJSON(writer, urlDataManager);
+    writer.appendName(DEBUGCANVAS_ATTRIBUTE_PAINT);
+    MakeJsonPaint(writer, fPaint, urlDataManager);
+}
+
 DrawPathCommand::DrawPathCommand(const SkPath& path, const SkPaint& paint)
         : INHERITED(kDrawPath_OpType) {
     fPath  = path;
@@ -1949,7 +1967,7 @@ void DrawShadowCommand::toJSON(SkJSONWriter& writer, UrlDataManager& urlDataMana
 DrawEdgeAAQuadCommand::DrawEdgeAAQuadCommand(const SkRect&         rect,
                                              const SkPoint         clip[],
                                              SkCanvas::QuadAAFlags aa,
-                                             SkColor               color,
+                                             const SkColor4f&      color,
                                              SkBlendMode           mode)
         : INHERITED(kDrawEdgeAAQuad_OpType)
         , fRect(rect)

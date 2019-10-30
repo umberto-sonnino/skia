@@ -9,8 +9,8 @@
 #ifndef GrGLTypes_DEFINED
 #define GrGLTypes_DEFINED
 
-#include "GrGLConfig.h"
-#include "SkRefCnt.h"
+#include "include/core/SkRefCnt.h"
+#include "include/gpu/gl/GrGLConfig.h"
 
 /**
  * Classifies GL contexts by which standard they implement (currently as OpenGL vs. OpenGL ES).
@@ -52,6 +52,38 @@ static const int kGrGLStandardCnt = 4;
 ///////////////////////////////////////////////////////////////////////////////
 
 /**
+ * The supported GL formats represented as an enum. Actual support by GrContext depends on GL
+ * context version and extensions.
+ */
+enum class GrGLFormat {
+    kUnknown,
+
+    kRGBA8,
+    kR8,
+    kALPHA8,
+    kLUMINANCE8,
+    kBGRA8,
+    kRGB565,
+    kRGBA16F,
+    kR16F,
+    kRGB8,
+    kRG8,
+    kRGB10_A2,
+    kRGBA4,
+    kSRGB8_ALPHA8,
+    kCOMPRESSED_RGB8_ETC2,
+    kCOMPRESSED_ETC1_RGB8,
+    kR16,
+    kRG16,
+    kRGBA16,
+    kRG16F,
+    kLUMINANCE16F,
+
+    kLast = kLUMINANCE16F
+};
+
+///////////////////////////////////////////////////////////////////////////////
+/**
  * Declares typedefs for all the GL functions used in GrGLInterface
  */
 
@@ -68,6 +100,7 @@ typedef unsigned char GrGLubyte;
 typedef unsigned short GrGLushort;
 typedef unsigned int GrGLuint;
 typedef uint64_t GrGLuint64;
+typedef unsigned short int GrGLhalf;
 typedef float GrGLfloat;
 typedef float GrGLclampf;
 typedef double GrGLdouble;

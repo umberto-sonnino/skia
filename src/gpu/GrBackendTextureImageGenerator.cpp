@@ -5,24 +5,24 @@
  * found in the LICENSE file.
  */
 
-#include "GrBackendTextureImageGenerator.h"
-#include "GrContext.h"
-#include "GrContextPriv.h"
-#include "GrGpu.h"
-#include "GrProxyProvider.h"
-#include "GrRecordingContext.h"
-#include "GrRecordingContextPriv.h"
-#include "GrRenderTargetContext.h"
-#include "GrResourceCache.h"
-#include "GrResourceProvider.h"
-#include "GrResourceProviderPriv.h"
-#include "GrSemaphore.h"
-#include "GrTexture.h"
-#include "GrTexturePriv.h"
-#include "GrTextureProxyPriv.h"
-#include "SkGr.h"
-#include "SkMessageBus.h"
-#include "gl/GrGLTexture.h"
+#include "include/gpu/GrContext.h"
+#include "include/gpu/GrTexture.h"
+#include "include/private/GrRecordingContext.h"
+#include "src/core/SkMessageBus.h"
+#include "src/gpu/GrBackendTextureImageGenerator.h"
+#include "src/gpu/GrContextPriv.h"
+#include "src/gpu/GrGpu.h"
+#include "src/gpu/GrProxyProvider.h"
+#include "src/gpu/GrRecordingContextPriv.h"
+#include "src/gpu/GrRenderTargetContext.h"
+#include "src/gpu/GrResourceCache.h"
+#include "src/gpu/GrResourceProvider.h"
+#include "src/gpu/GrResourceProviderPriv.h"
+#include "src/gpu/GrSemaphore.h"
+#include "src/gpu/GrTexturePriv.h"
+#include "src/gpu/GrTextureProxyPriv.h"
+#include "src/gpu/SkGr.h"
+#include "src/gpu/gl/GrGLTexture.h"
 
 GrBackendTextureImageGenerator::RefHelper::RefHelper(GrTexture* texture, uint32_t owningContextID)
         : fOriginalTexture(texture)
@@ -35,8 +35,8 @@ GrBackendTextureImageGenerator::RefHelper::~RefHelper() {
 
     // Generator has been freed, and no one is borrowing the texture. Notify the original cache
     // that it can free the last ref, so it happens on the correct thread.
-    GrGpuResourceFreedMessage msg { fOriginalTexture, fOwningContextID };
-    SkMessageBus<GrGpuResourceFreedMessage>::Post(msg);
+    GrTextureFreedMessage msg { fOriginalTexture, fOwningContextID };
+    SkMessageBus<GrTextureFreedMessage>::Post(msg);
 }
 
 std::unique_ptr<SkImageGenerator>
@@ -48,16 +48,12 @@ GrBackendTextureImageGenerator::Make(sk_sp<GrTexture> texture, GrSurfaceOrigin o
     // Attach our texture to this context's resource cache. This ensures that deletion will happen
     // in the correct thread/context. This adds the only ref to the texture that will persist from
     // this point. That ref will be released when the generator's RefHelper is freed.
-    context->priv().getResourceCache()->insertDelayedResourceUnref(texture.get());
+    context->priv().getResourceCache()->insertDelayedTextureUnref(texture.get());
 
     GrBackendTexture backendTexture = texture->getBackendTexture();
-    GrBackendFormat backendFormat = backendTexture.getBackendFormat();
-    if (!backendFormat.isValid()) {
-        return nullptr;
-    }
-    backendTexture.fConfig =
-            context->priv().caps()->getConfigFromBackendFormat(backendFormat, colorType);
-    if (backendTexture.fConfig == kUnknown_GrPixelConfig) {
+
+    if (!context->priv().caps()->areColorTypeAndFormatCompatible(
+            SkColorTypeToGrColorType(colorType), backendTexture.getBackendFormat())) {
         return nullptr;
     }
 
@@ -78,7 +74,6 @@ GrBackendTextureImageGenerator::GrBackendTextureImageGenerator(const SkImageInfo
         , fRefHelper(new RefHelper(texture, owningContextID))
         , fSemaphore(std::move(semaphore))
         , fBackendTexture(backendTex)
-        , fConfig(backendTex.config())
         , fSurfaceOrigin(origin) {}
 
 GrBackendTextureImageGenerator::~GrBackendTextureImageGenerator() {
@@ -109,6 +104,7 @@ sk_sp<GrTextureProxy> GrBackendTextureImageGenerator::onGenerateTexture(
     }
 
     auto proxyProvider = context->priv().proxyProvider();
+    const GrCaps* caps = context->priv().caps();
 
     fBorrowingMutex.acquire();
     sk_sp<GrRefCntedCallback> releaseProcHelper;
@@ -140,21 +136,33 @@ sk_sp<GrTextureProxy> GrBackendTextureImageGenerator::onGenerateTexture(
 
     SkASSERT(fRefHelper->fBorrowingContextID == context->priv().contextID());
 
+    GrBackendFormat backendFormat = fBackendTexture.getBackendFormat();
+    SkASSERT(backendFormat.isValid());
+
+    GrColorType grColorType = SkColorTypeToGrColorType(info.colorType());
+
+    GrPixelConfig config = caps->getConfigFromBackendFormat(backendFormat, grColorType);
+    if (kUnknown_GrPixelConfig == config) {
+        return nullptr;
+    }
+
     GrSurfaceDesc desc;
     desc.fWidth = fBackendTexture.width();
     desc.fHeight = fBackendTexture.height();
-    desc.fConfig = fConfig;
+    desc.fConfig = config;
     GrMipMapped mipMapped = fBackendTexture.hasMipMaps() ? GrMipMapped::kYes : GrMipMapped::kNo;
 
-    GrBackendFormat format = fBackendTexture.getBackendFormat();
-    SkASSERT(format.isValid());
+    // Ganesh assumes that, when wrapping a mipmapped backend texture from a client, that its
+    // mipmaps are fully fleshed out.
+    GrMipMapsStatus mipMapsStatus = fBackendTexture.hasMipMaps()
+            ? GrMipMapsStatus::kValid : GrMipMapsStatus::kNotAllocated;
 
     // Must make copies of member variables to capture in the lambda since this image generator may
     // be deleted before we actually execute the lambda.
     sk_sp<GrTextureProxy> proxy = proxyProvider->createLazyProxy(
             [refHelper = fRefHelper, releaseProcHelper, semaphore = fSemaphore,
-             backendTexture = fBackendTexture](GrResourceProvider* resourceProvider)
-                    -> GrSurfaceProxy::LazyInstantiationResult {
+             backendTexture = fBackendTexture, grColorType](
+                    GrResourceProvider* resourceProvider) -> GrSurfaceProxy::LazyCallbackResult {
                 if (semaphore) {
                     resourceProvider->priv().gpu()->waitSemaphore(semaphore);
                 }
@@ -179,8 +187,8 @@ sk_sp<GrTextureProxy> GrBackendTextureImageGenerator::onGenerateTexture(
                     // ever see the original texture, so this should be safe.
                     // We make the texture uncacheable so that the release proc is called ASAP.
                     tex = resourceProvider->wrapBackendTexture(
-                            backendTexture, kBorrow_GrWrapOwnership, GrWrapCacheable::kNo,
-                            kRead_GrIOType);
+                            backendTexture, grColorType, kBorrow_GrWrapOwnership,
+                            GrWrapCacheable::kNo, kRead_GrIOType);
                     if (!tex) {
                         return {};
                     }
@@ -189,11 +197,11 @@ sk_sp<GrTextureProxy> GrBackendTextureImageGenerator::onGenerateTexture(
                 }
                 // We use keys to avoid re-wrapping the GrBackendTexture in a GrTexture. This is
                 // unrelated to the whatever SkImage key may be assigned to the proxy.
-                return {std::move(tex), GrSurfaceProxy::LazyInstantiationKeyMode::kUnsynced};
+                return {std::move(tex), true, GrSurfaceProxy::LazyInstantiationKeyMode::kUnsynced};
             },
-            format, desc, fSurfaceOrigin, mipMapped, GrInternalSurfaceFlags::kReadOnly,
-            SkBackingFit::kExact, SkBudgeted::kNo);
-
+            backendFormat, desc, GrRenderable::kNo, 1, fSurfaceOrigin, mipMapped, mipMapsStatus,
+            GrInternalSurfaceFlags::kReadOnly, SkBackingFit::kExact, SkBudgeted::kNo,
+            GrProtected::kNo, GrSurfaceProxy::UseAllocator::kYes);
     if (!proxy) {
         return nullptr;
     }
@@ -208,28 +216,9 @@ sk_sp<GrTextureProxy> GrBackendTextureImageGenerator::onGenerateTexture(
         // because Vulkan will want to do the copy as a draw. All other copies would require a
         // layout change in Vulkan and we do not change the layout of borrowed images.
         GrMipMapped mipMapped = willNeedMipMaps ? GrMipMapped::kYes : GrMipMapped::kNo;
-
-        GrBackendFormat format = proxy->backendFormat().makeTexture2D();
-        if (!format.isValid()) {
-            return nullptr;
-        }
-
-        sk_sp<GrRenderTargetContext> rtContext(
-            context->priv().makeDeferredRenderTargetContext(
-                format, SkBackingFit::kExact, info.width(), info.height(),
-                proxy->config(), nullptr, 1, mipMapped, proxy->origin(), nullptr,
-                SkBudgeted::kYes));
-
-        if (!rtContext) {
-            return nullptr;
-        }
-
         SkIRect subset = SkIRect::MakeXYWH(origin.fX, origin.fY, info.width(), info.height());
-        if (!rtContext->copy(proxy.get(), subset, SkIPoint::Make(0, 0))) {
-            return nullptr;
-        }
 
-        return rtContext->asTextureProxyRef();
+        return GrSurfaceProxy::Copy(context, proxy.get(), grColorType, mipMapped, subset,
+                                    SkBackingFit::kExact, SkBudgeted::kYes);
     }
 }
-

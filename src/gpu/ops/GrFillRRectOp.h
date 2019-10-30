@@ -8,7 +8,7 @@
 #ifndef GrFillRRectOp_DEFINED
 #define GrFillRRectOp_DEFINED
 
-#include "GrDrawOp.h"
+#include "src/gpu/ops/GrDrawOp.h"
 
 class GrRecordingContext;
 
@@ -26,10 +26,10 @@ public:
                 ? FixedFunctionFlags::kUsesHWAA
                 : FixedFunctionFlags::kNone;
     }
-    GrProcessorSet::Analysis finalize(
-            const GrCaps&, const GrAppliedClip*, GrFSAAType, GrClampType) override;
+    GrProcessorSet::Analysis finalize(const GrCaps&, const GrAppliedClip*,
+                                      bool hasMixedSampledCoverage, GrClampType) override;
     CombineResult onCombineIfPossible(GrOp*, const GrCaps&) override;
-    void visitProxies(const VisitProxyFunc& fn, VisitorType) const override {
+    void visitProxies(const VisitProxyFunc& fn) const override {
         fProcessors.visitProxies(fn);
     }
     void onPrepare(GrOpFlushState*) override;
@@ -79,7 +79,10 @@ private:
     int fInstanceStride = 0;
 
     sk_sp<const GrBuffer> fInstanceBuffer;
+    sk_sp<const GrBuffer> fVertexBuffer;
+    sk_sp<const GrBuffer> fIndexBuffer;
     int fBaseInstance;
+    int fIndexCount = 0;
 
     friend class GrOpMemoryPool;
 };

@@ -5,14 +5,14 @@
  * found in the LICENSE file.
  */
 
-#include "GrYUVtoRGBEffect.h"
+#include "src/gpu/effects/GrYUVtoRGBEffect.h"
 
-#include "glsl/GrGLSLFragmentProcessor.h"
-#include "glsl/GrGLSLFragmentShaderBuilder.h"
-#include "glsl/GrGLSLProgramBuilder.h"
-#include "GrTexture.h"
-#include "SkSLCPP.h"
-#include "SkSLUtil.h"
+#include "include/gpu/GrTexture.h"
+#include "src/gpu/glsl/GrGLSLFragmentProcessor.h"
+#include "src/gpu/glsl/GrGLSLFragmentShaderBuilder.h"
+#include "src/gpu/glsl/GrGLSLProgramBuilder.h"
+#include "src/sksl/SkSLCPP.h"
+#include "src/sksl/SkSLUtil.h"
 
 static const float kJPEGConversionMatrix[16] = {
     1.0f,  0.0f,       1.402f,    -0.703749f,
@@ -44,7 +44,7 @@ std::unique_ptr<GrFragmentProcessor> GrYUVtoRGBEffect::Make(const sk_sp<GrTextur
     int numPlanes;
     SkAssertResult(SkYUVAIndex::AreValidIndices(yuvaIndices, &numPlanes));
 
-    const SkISize YSize = proxies[yuvaIndices[SkYUVAIndex::kY_Index].fIndex]->isize();
+    const SkISize YDimensions = proxies[yuvaIndices[SkYUVAIndex::kY_Index].fIndex]->dimensions();
 
     GrSamplerState::Filter minimizeFilterMode = GrSamplerState::Filter::kMipMap == filterMode ?
                                                 GrSamplerState::Filter::kMipMap :
@@ -53,10 +53,11 @@ std::unique_ptr<GrFragmentProcessor> GrYUVtoRGBEffect::Make(const sk_sp<GrTextur
     GrSamplerState::Filter filterModes[4];
     SkSize scales[4];
     for (int i = 0; i < numPlanes; ++i) {
-        SkISize size = proxies[i]->isize();
-        scales[i] = SkSize::Make(SkIntToScalar(size.width()) / SkIntToScalar(YSize.width()),
-                                 SkIntToScalar(size.height()) / SkIntToScalar(YSize.height()));
-        filterModes[i] = (size == YSize) ? filterMode : minimizeFilterMode;
+        SkISize dimensions = proxies[i]->dimensions();
+        scales[i] = SkSize::Make(
+                SkIntToScalar(dimensions.width()) / SkIntToScalar(YDimensions.width()),
+                SkIntToScalar(dimensions.height()) / SkIntToScalar(YDimensions.height()));
+        filterModes[i] = (dimensions == YDimensions) ? filterMode : minimizeFilterMode;
     }
 
     return std::unique_ptr<GrFragmentProcessor>(new GrYUVtoRGBEffect(
@@ -98,7 +99,7 @@ GrGLSLFragmentProcessor* GrYUVtoRGBEffect::onCreateGLSLInstance() const {
 
             SkString coords[4];
             for (int i = 0; i < numSamplers; ++i) {
-                coords[i] = fragBuilder->ensureCoords2D(args.fTransformedCoords[i]);
+                coords[i] = fragBuilder->ensureCoords2D(args.fTransformedCoords[i].fVaryingPoint);
             }
 
             for (int i = 0; i < numSamplers; ++i) {

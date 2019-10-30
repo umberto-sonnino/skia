@@ -9,9 +9,9 @@
 #ifndef SkNWayCanvas_DEFINED
 #define SkNWayCanvas_DEFINED
 
-#include "../private/SkTDArray.h"
-#include "SkCanvasVirtualEnforcer.h"
-#include "SkNoDrawCanvas.h"
+#include "include/core/SkCanvasVirtualEnforcer.h"
+#include "include/private/SkTDArray.h"
+#include "include/utils/SkNoDrawCanvas.h"
 
 class SK_API SkNWayCanvas : public SkCanvasVirtualEnforcer<SkNoDrawCanvas> {
 public:
@@ -41,6 +41,7 @@ protected:
                              const SkPaint& paint) override;
 
     void onDrawPaint(const SkPaint&) override;
+    void onDrawBehind(const SkPaint&) override;
     void onDrawPoints(PointMode, size_t count, const SkPoint pts[], const SkPaint&) override;
     void onDrawRect(const SkRect&, const SkPaint&) override;
     void onDrawRegion(const SkRegion&, const SkPaint&) override;
@@ -76,7 +77,7 @@ protected:
     void onDrawDrawable(SkDrawable*, const SkMatrix*) override;
     void onDrawAnnotation(const SkRect&, const char[], SkData*) override;
 
-    void onDrawEdgeAAQuad(const SkRect&, const SkPoint[4], QuadAAFlags, SkColor,
+    void onDrawEdgeAAQuad(const SkRect&, const SkPoint[4], QuadAAFlags, const SkColor4f&,
                           SkBlendMode) override;
     void onDrawEdgeAAImageSet(const ImageSetEntry[], int count, const SkPoint[], const SkMatrix[],
                               const SkPaint*, SrcRectConstraint) override;

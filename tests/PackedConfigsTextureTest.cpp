@@ -11,13 +11,14 @@
  * as valid texturing configs.
  */
 
-#include "Test.h"
+#include "tests/Test.h"
 
-#include "GrContext.h"
-#include "GrContextPriv.h"
-#include "GrProxyProvider.h"
-#include "GrTextureProxy.h"
-#include "ProxyUtils.h"
+#include "include/gpu/GrContext.h"
+#include "src/gpu/GrContextPriv.h"
+#include "src/gpu/GrImageInfo.h"
+#include "src/gpu/GrProxyProvider.h"
+#include "src/gpu/GrTextureProxy.h"
+#include "tools/gpu/ProxyUtils.h"
 
 static const int DEV_W = 10, DEV_H = 10;
 static const uint8_t TOL = 0x4;
@@ -112,15 +113,17 @@ static void run_test(skiatest::Reporter* reporter, GrContext* context, int array
             SkImageInfo::Make(DEV_W, DEV_H, kRGBA_8888_SkColorType, kPremul_SkAlphaType);
 
     for (auto origin : { kTopLeft_GrSurfaceOrigin, kBottomLeft_GrSurfaceOrigin }) {
-        auto proxy = sk_gpu_test::MakeTextureProxyFromData(context, false, DEV_W, DEV_H,
-                                                           colorType,
-                                                           origin, controlPixelData.begin(), 0);
+        auto grColorType = SkColorTypeToGrColorType(colorType);
+        auto proxy = sk_gpu_test::MakeTextureProxyFromData(
+                context, GrRenderable::kNo, origin,
+                {grColorType, kPremul_SkAlphaType, nullptr, DEV_W, DEV_H},
+                controlPixelData.begin(), 0);
         SkASSERT(proxy);
 
-        sk_sp<GrSurfaceContext> sContext = context->priv().makeWrappedSurfaceContext(
-                                                                        std::move(proxy));
+        auto sContext = context->priv().makeWrappedSurfaceContext(std::move(proxy), grColorType,
+                                                                  kPremul_SkAlphaType);
 
-        if (!sContext->readPixels(dstInfo, readBuffer.begin(), 0, 0, 0)) {
+        if (!sContext->readPixels(dstInfo, readBuffer.begin(), 0, {0, 0})) {
             // We only require this to succeed if the format is renderable.
             REPORTER_ASSERT(reporter, !context->colorTypeSupportedAsSurface(colorType));
             return;

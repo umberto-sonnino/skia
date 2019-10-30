@@ -5,10 +5,10 @@
  * found in the LICENSE file.
  */
 
-#include "GrShaderCaps.h"
-#include "SkSLCompiler.h"
+#include "src/gpu/GrShaderCaps.h"
+#include "src/sksl/SkSLCompiler.h"
 
-#include "../Fuzz.h"
+#include "fuzz/Fuzz.h"
 
 bool FuzzSKSL2Pipeline(sk_sp<SkData> bytes) {
     SkSL::Compiler compiler;
@@ -22,7 +22,8 @@ bool FuzzSKSL2Pipeline(sk_sp<SkData> bytes) {
                                                                  bytes->size()),
                                                     settings);
     std::vector<SkSL::Compiler::FormatArg> formatArgs;
-    if (!program || !compiler.toPipelineStage(*program, &output, &formatArgs)) {
+    std::vector<SkSL::Compiler::GLSLFunction> functions;
+    if (!program || !compiler.toPipelineStage(*program, &output, &formatArgs, &functions)) {
         return false;
     }
     return true;

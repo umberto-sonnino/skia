@@ -34,12 +34,14 @@ class AndroidFlavor(default.DefaultFlavor):
         lotties_dir   = android_data_dir + 'lotties',
         skp_dir       = android_data_dir + 'skps',
         svg_dir       = android_data_dir + 'svgs',
+        mskp_dir      = android_data_dir + 'mskp',
         tmp_dir       = android_data_dir)
 
     # A list of devices we can't root.  If rooting fails and a device is not
     # on the list, we fail the task to avoid perf inconsistencies.
     self.rootable_blacklist = ['GalaxyS6', 'GalaxyS7_G930FD', 'GalaxyS9',
-                               'MotoG4', 'NVIDIA_Shield']
+                               'MotoG4', 'NVIDIA_Shield', 'P30',
+                               'TecnoSpark3Pro']
 
     # Maps device type -> CPU ids that should be scaled for nanobench.
     # Many devices have two (or more) different CPUs (e.g. big.LITTLE
@@ -52,7 +54,6 @@ class AndroidFlavor(default.DefaultFlavor):
     # frequency.  See also disable_for_nanobench.
     self.cpus_to_scale = {
       'Nexus5x': [4],
-      'NexusPlayer': [0, 2], # has 2 identical chips, so scale them both.
       'Pixel': [2],
       'Pixel2XL': [4]
     }
@@ -129,6 +130,10 @@ class AndroidFlavor(default.DefaultFlavor):
       # AndroidOne doesn't support ondemand governor. hotplug is similar.
       if device == 'AndroidOne':
         self._set_governor(i, 'hotplug')
+      elif device == 'Pixel3a':
+        # Pixel3a has userspace powersave performance schedutil.
+        # performance seems like a reasonable choice.
+        self._set_governor(i, 'performance')
       else:
         self._set_governor(i, 'ondemand')
 
@@ -352,7 +357,7 @@ if actual_freq != str(freq):
       self._ever_ran_adb = True
       asan_setup = self.m.vars.slave_dir.join(
             'android_ndk_linux', 'toolchains', 'llvm', 'prebuilt',
-            'linux-x86_64', 'lib64', 'clang', '8.0.2', 'bin',
+            'linux-x86_64', 'lib64', 'clang', '8.0.7', 'bin',
             'asan_device_setup')
       self.m.run(self.m.python.inline, 'Setting up device to run ASAN',
         program="""
@@ -527,37 +532,43 @@ time.sleep(60)
 
   def copy_directory_contents_to_device(self, host, device):
     # Copy the tree, avoiding hidden directories and resolving symlinks.
-    self.m.run(self.m.python.inline, 'push %s/* %s' % (host, device),
-               program="""
-    import os
-    import subprocess
-    import sys
-    host   = sys.argv[1]
-    device = sys.argv[2]
-    for d, _, fs in os.walk(host):
-      p = os.path.relpath(d, host)
-      if p != '.' and p.startswith('.'):
-        continue
-      for f in fs:
-        print os.path.join(p,f)
-        subprocess.check_call(['%s', 'push',
-                               os.path.realpath(os.path.join(host, p, f)),
-                               os.path.join(device, p, f)])
-    """ % self.ADB_BINARY, args=[host, device], infra_step=True)
+    sep = self.m.path.sep
+    host_str = str(host).rstrip(sep) + sep
+    device = device.rstrip('/')
+    with self.m.step.nest('push %s* %s' % (host_str, device)):
+      contents = self.m.file.listdir('list %s' % host, host, recursive=True,
+                                     test_data=['file1',
+                                                'subdir' + sep + 'file2',
+                                                '.file3',
+                                                '.ignore' + sep + 'file4'])
+      for path in contents:
+        path_str = str(path)
+        assert path_str.startswith(host_str), (
+            'expected %s to have %s as a prefix' % (path_str, host_str))
+        relpath = path_str[len(host_str):]
+        # NOTE(dogben): Previous logic used os.walk and skipped directories
+        # starting with '.', but not files starting with '.'. It's not clear
+        # what the reason was (maybe skipping .git?), but I'm keeping that
+        # behavior here.
+        if self.m.path.dirname(relpath).startswith('.'):
+          continue
+        device_path = device + '/' + relpath  # Android paths use /
+        self._adb('push %s' % path, 'push',
+                  self.m.path.realpath(path), device_path)
 
   def copy_directory_contents_to_host(self, device, host):
     # TODO(borenet): When all of our devices are on Android 6.0 and up, we can
     # switch to using tar to zip up the results before pulling.
     with self.m.step.nest('adb pull'):
-      with self.m.tempfile.temp_dir('adb_pull') as tmp:
-        self._adb('pull %s' % device, 'pull', device, tmp)
-        paths = self.m.file.glob_paths(
-            'list pulled files',
-            tmp,
-            self.m.path.basename(device) + self.m.path.sep + '*',
-            test_data=['%d.png' % i for i in (1, 2)])
-        for p in paths:
-          self.m.file.copy('copy %s' % self.m.path.basename(p), p, host)
+      tmp = self.m.path.mkdtemp('adb_pull')
+      self._adb('pull %s' % device, 'pull', device, tmp)
+      paths = self.m.file.glob_paths(
+          'list pulled files',
+          tmp,
+          self.m.path.basename(device) + self.m.path.sep + '*',
+          test_data=['%d.png' % i for i in (1, 2)])
+      for p in paths:
+        self.m.file.copy('copy %s' % self.m.path.basename(p), p, host)
 
   def read_file_on_device(self, path, **kwargs):
     rv = self._adb('read %s' % path,

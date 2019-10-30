@@ -7,26 +7,42 @@
 
 // This test only works with the GPU backend.
 
-#include "gm.h"
+#include "gm/gm.h"
+#include "include/core/SkBitmap.h"
+#include "include/core/SkCanvas.h"
+#include "include/core/SkColor.h"
+#include "include/core/SkColorFilter.h"
+#include "include/core/SkColorPriv.h"
+#include "include/core/SkImage.h"
+#include "include/core/SkImageInfo.h"
+#include "include/core/SkPaint.h"
+#include "include/core/SkPixmap.h"
+#include "include/core/SkPoint.h"
+#include "include/core/SkRefCnt.h"
+#include "include/core/SkScalar.h"
+#include "include/core/SkShader.h"
+#include "include/core/SkSize.h"
+#include "include/core/SkString.h"
+#include "include/core/SkTileMode.h"
+#include "include/core/SkTypes.h"
+#include "include/effects/SkGradientShader.h"
+#include "include/gpu/GrBackendSurface.h"
+#include "include/gpu/GrContext.h"
+#include "include/gpu/GrTypes.h"
+#include "include/private/GrTypesPriv.h"
+#include "include/private/SkTo.h"
 
-#include "GrBackendSurface.h"
-#include "GrContext.h"
-#include "GrContextPriv.h"
-#include "GrGpu.h"
-#include "SkBitmap.h"
-#include "SkGradientShader.h"
-#include "SkImage.h"
-#include "SkTo.h"
+class GrRenderTargetContext;
 
 static sk_sp<SkColorFilter> yuv_to_rgb_colorfilter() {
     static const float kJPEGConversionMatrix[20] = {
-        1.0f,  0.0f,       1.402f,    0.0f, -180.0f,
-        1.0f, -0.344136f, -0.714136f, 0.0f,  136.0f,
-        1.0f,  1.772f,     0.0f,      0.0f, -227.6f,
+        1.0f,  0.0f,       1.402f,    0.0f, -180.0f/255,
+        1.0f, -0.344136f, -0.714136f, 0.0f,  136.0f/255,
+        1.0f,  1.772f,     0.0f,      0.0f, -227.6f/255,
         0.0f,  0.0f,       0.0f,      1.0f,    0.0f
     };
 
-    return SkColorFilters::MatrixRowMajor255(kJPEGConversionMatrix);
+    return SkColorFilters::Matrix(kJPEGConversionMatrix);
 }
 
 namespace skiagm {
@@ -60,11 +76,14 @@ protected:
         canvas.drawPaint(paint);
         SkPMColor* rgbColors = static_cast<SkPMColor*>(rgbBmp.getPixels());
 
-        SkImageInfo yinfo = SkImageInfo::MakeA8(kBmpSize, kBmpSize);
+        SkImageInfo yinfo = SkImageInfo::Make(kBmpSize, kBmpSize, kGray_8_SkColorType,
+                                              kUnpremul_SkAlphaType);
         fYUVBmps[0].allocPixels(yinfo);
-        SkImageInfo uinfo = SkImageInfo::MakeA8(kBmpSize / 2, kBmpSize / 2);
+        SkImageInfo uinfo = SkImageInfo::Make(kBmpSize / 2, kBmpSize / 2, kGray_8_SkColorType,
+                                              kUnpremul_SkAlphaType);
         fYUVBmps[1].allocPixels(uinfo);
-        SkImageInfo vinfo = SkImageInfo::MakeA8(kBmpSize / 2, kBmpSize / 2);
+        SkImageInfo vinfo = SkImageInfo::Make(kBmpSize / 2, kBmpSize / 2, kGray_8_SkColorType,
+                                              kUnpremul_SkAlphaType);
         fYUVBmps[2].allocPixels(vinfo);
         unsigned char* yPixels;
         signed char* uvPixels[2];
@@ -105,33 +124,18 @@ protected:
     }
 
     void createYUVTextures(GrContext* context, GrBackendTexture yuvTextures[3]) {
-        GrGpu* gpu = context->priv().getGpu();
-        if (!gpu) {
-            return;
-        }
-
         for (int i = 0; i < 3; ++i) {
             SkASSERT(fYUVBmps[i].width() == SkToInt(fYUVBmps[i].rowBytes()));
-            yuvTextures[i] = gpu->createTestingOnlyBackendTexture(fYUVBmps[i].getPixels(),
-                                                                  fYUVBmps[i].width(),
-                                                                  fYUVBmps[i].height(),
-                                                                  GrColorType::kAlpha_8,
-                                                                  false, GrMipMapped::kNo);
+            yuvTextures[i] = context->createBackendTexture(&fYUVBmps[i].pixmap(), 1,
+                                                           GrRenderable::kNo, GrProtected::kNo);
         }
-        context->resetContext();
     }
 
     void createResultTexture(GrContext* context, int width, int height,
                              GrBackendTexture* resultTexture) {
-        GrGpu* gpu = context->priv().getGpu();
-        if (!gpu) {
-            return;
-        }
-
-        *resultTexture = gpu->createTestingOnlyBackendTexture(
-                nullptr, width, height, GrColorType::kRGBA_8888, true, GrMipMapped::kNo);
-
-        context->resetContext();
+        *resultTexture = context->createBackendTexture(
+                width, height, kRGBA_8888_SkColorType, SkColors::kTransparent,
+                GrMipMapped::kNo, GrRenderable::kYes, GrProtected::kNo);
     }
 
     void deleteBackendTextures(GrContext* context, GrBackendTexture textures[], int n) {
@@ -139,20 +143,13 @@ protected:
             return;
         }
 
-        GrGpu* gpu = context->priv().getGpu();
-        if (!gpu) {
-            return;
-        }
+        GrFlushInfo flushInfo;
+        flushInfo.fFlags = kSyncCpu_GrFlushFlag;
+        context->flush(flushInfo);
 
-        context->flush();
-        gpu->testingOnly_flushGpuAndSync();
         for (int i = 0; i < n; ++i) {
-            if (textures[i].isValid()) {
-                gpu->deleteTestingOnlyBackendTexture(textures[i]);
-            }
+            context->deleteBackendTexture(textures[i]);
         }
-
-        context->resetContext();
     }
 
     void onDraw(GrContext* context, GrRenderTargetContext*, SkCanvas* canvas) override {

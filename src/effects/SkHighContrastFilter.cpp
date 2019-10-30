@@ -5,20 +5,20 @@
 * found in the LICENSE file.
 */
 
-#include "SkHighContrastFilter.h"
-#include "SkArenaAlloc.h"
-#include "SkColorData.h"
-#include "SkEffectPriv.h"
-#include "SkRasterPipeline.h"
-#include "SkReadBuffer.h"
-#include "SkString.h"
-#include "SkWriteBuffer.h"
+#include "include/core/SkString.h"
+#include "include/effects/SkHighContrastFilter.h"
+#include "include/private/SkColorData.h"
+#include "src/core/SkArenaAlloc.h"
+#include "src/core/SkEffectPriv.h"
+#include "src/core/SkRasterPipeline.h"
+#include "src/core/SkReadBuffer.h"
+#include "src/core/SkWriteBuffer.h"
 
 #if SK_SUPPORT_GPU
-#include "GrColorSpaceInfo.h"
-#include "GrContext.h"
-#include "glsl/GrGLSLFragmentProcessor.h"
-#include "glsl/GrGLSLFragmentShaderBuilder.h"
+#include "include/gpu/GrContext.h"
+#include "src/gpu/GrColorInfo.h"
+#include "src/gpu/glsl/GrGLSLFragmentProcessor.h"
+#include "src/gpu/glsl/GrGLSLFragmentShaderBuilder.h"
 #endif
 
 using InvertStyle = SkHighContrastConfig::InvertStyle;
@@ -36,9 +36,9 @@ public:
     ~SkHighContrast_Filter() override {}
 
 #if SK_SUPPORT_GPU
-    std::unique_ptr<GrFragmentProcessor> asFragmentProcessor(
-            GrRecordingContext*, const GrColorSpaceInfo&) const override;
- #endif
+    std::unique_ptr<GrFragmentProcessor> asFragmentProcessor(GrRecordingContext*,
+                                                             const GrColorInfo&) const override;
+#endif
 
     bool onAppendStages(const SkStageRec& rec, bool shaderIsOpaque) const override;
 
@@ -72,7 +72,7 @@ bool SkHighContrast_Filter::onAppendStages(const SkStageRec& rec, bool shaderIsO
         // TODO: sRGB?
         *tf = {2,1, 0,0,0,0,0};
     }
-    p->append(SkRasterPipeline::parametric, tf);
+    p->append_transfer_function(*tf);
 
     if (fConfig.fGrayscale) {
         float r = SK_LUM_COEFF_R;
@@ -120,7 +120,7 @@ bool SkHighContrast_Filter::onAppendStages(const SkStageRec& rec, bool shaderIsO
         // See above... historically untagged == gamma 2 in this filter.
         *invTF ={0.5f,1, 0,0,0,0,0};
     }
-    p->append(SkRasterPipeline::parametric, invTF);
+    p->append_transfer_function(*invTF);
 
     if (!shaderIsOpaque) {
         p->append(SkRasterPipeline::premul);
@@ -248,7 +248,7 @@ void GLHighContrastFilterEffect::emitCode(EmitArgs& args) {
     fragBuilder->codeAppendf("half4 color = %s;", args.fInputColor);
 
     // Unpremultiply. The max() is to guard against 0 / 0.
-    fragBuilder->codeAppendf("half nonZeroAlpha = max(color.a, 0.00001);");
+    fragBuilder->codeAppendf("half nonZeroAlpha = max(color.a, 0.0001);");
     fragBuilder->codeAppendf("color = half4(color.rgb / nonZeroAlpha, nonZeroAlpha);");
 
     if (hcfe.linearize()) {
@@ -354,7 +354,7 @@ void GLHighContrastFilterEffect::emitCode(EmitArgs& args) {
 }
 
 std::unique_ptr<GrFragmentProcessor> SkHighContrast_Filter::asFragmentProcessor(
-        GrRecordingContext*, const GrColorSpaceInfo& csi) const {
+        GrRecordingContext*, const GrColorInfo& csi) const {
     bool linearize = !csi.isLinearlyBlended();
     return HighContrastFilterEffect::Make(fConfig, linearize);
 }

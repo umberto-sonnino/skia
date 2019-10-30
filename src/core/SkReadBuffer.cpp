@@ -5,18 +5,18 @@
  * found in the LICENSE file.
  */
 
-#include "SkAutoMalloc.h"
-#include "SkBitmap.h"
-#include "SkData.h"
-#include "SkImage.h"
-#include "SkImageGenerator.h"
-#include "SkMakeUnique.h"
-#include "SkMathPriv.h"
-#include "SkMatrixPriv.h"
-#include "SkReadBuffer.h"
-#include "SkSafeMath.h"
-#include "SkStream.h"
-#include "SkTypeface.h"
+#include "include/core/SkBitmap.h"
+#include "include/core/SkData.h"
+#include "include/core/SkImage.h"
+#include "include/core/SkImageGenerator.h"
+#include "include/core/SkStream.h"
+#include "include/core/SkTypeface.h"
+#include "src/core/SkAutoMalloc.h"
+#include "src/core/SkMakeUnique.h"
+#include "src/core/SkMathPriv.h"
+#include "src/core/SkMatrixPriv.h"
+#include "src/core/SkReadBuffer.h"
+#include "src/core/SkSafeMath.h"
 
 #ifndef SK_DISABLE_READBUFFER
 
@@ -288,7 +288,7 @@ uint32_t SkReadBuffer::getArrayCount() {
  */
 sk_sp<SkImage> SkReadBuffer::readImage() {
     SkIRect bounds;
-    if (this->isVersionLT(kStoreImageBounds_Version)) {
+    if (this->isVersionLT(SkPicturePriv::kStoreImageBounds_Version)) {
         bounds.fLeft = bounds.fTop = 0;
         bounds.fRight = this->read32();
         bounds.fBottom = this->read32();
@@ -333,7 +333,7 @@ sk_sp<SkImage> SkReadBuffer::readImage() {
         this->validate(false);
         return nullptr;
     }
-    if (this->isVersionLT(kDontNegateImageSize_Version)) {
+    if (this->isVersionLT(SkPicturePriv::kDontNegateImageSize_Version)) {
         (void)this->read32();   // originX
         (void)this->read32();   // originY
     }

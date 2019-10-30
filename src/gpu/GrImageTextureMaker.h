@@ -8,8 +8,8 @@
 #ifndef GrImageTextureMaker_DEFINED
 #define GrImageTextureMaker_DEFINED
 
-#include "GrTextureMaker.h"
-#include "SkImage.h"
+#include "include/core/SkImage.h"
+#include "src/gpu/GrTextureMaker.h"
 
 class SkImage_Lazy;
 class SkImage_GpuYUVA;
@@ -30,9 +30,6 @@ protected:
 
     void makeCopyKey(const CopyParams& stretch, GrUniqueKey* paramsCopyKey) override;
     void didCacheCopy(const GrUniqueKey& copyKey, uint32_t contextUniqueID) override {}
-
-    SkAlphaType alphaType() const override;
-    SkColorSpace* colorSpace() const override;
 
 private:
     const SkImage_Lazy*     fImage;
@@ -66,9 +63,6 @@ protected:
         FilterConstraint filterConstraint,
         bool coordsLimitedToConstraintRect,
         const GrSamplerState::Filter* filterOrNullForBicubic) override;
-
-    SkAlphaType alphaType() const override;
-    SkColorSpace* colorSpace() const override;
 
 private:
     const SkImage_GpuYUVA*  fImage;

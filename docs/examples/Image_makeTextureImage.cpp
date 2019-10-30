@@ -1,7 +1,7 @@
 #if 0  // Disabled until updated to use current API.
 // Copyright 2019 Google LLC.
 // Use of this source code is governed by a BSD-style license that can be found in the LICENSE file.
-#include "fiddle/examples.h"
+#include "tools/fiddle/examples.h"
 // HASH=eeec9e07e604b44d0208899a2fe5bef5
 REG_FIDDLE(Image_makeTextureImage, 256, 256, false, 5) {
 void draw(SkCanvas* canvas) {
@@ -11,7 +11,7 @@ void draw(SkCanvas* canvas) {
         }
         SkPaint paint;
         paint.setAntiAlias(true);
-        sk_sp<SkImage> texture(image->makeTextureImage(context, nullptr));
+        sk_sp<SkImage> texture(image->makeTextureImage(context));
         canvas->drawImage(texture, 0, 0);
         canvas->drawString(label, 20, texture->height() / 4, paint);
     };

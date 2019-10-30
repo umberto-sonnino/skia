@@ -5,26 +5,27 @@
  * found in the LICENSE file.
  */
 
-#include "GrDefaultPathRenderer.h"
+#include "src/gpu/ops/GrDefaultPathRenderer.h"
 
-#include "GrCaps.h"
-#include "GrDefaultGeoProcFactory.h"
-#include "GrDrawOpTest.h"
-#include "GrFillRectOp.h"
-#include "GrFixedClip.h"
-#include "GrMesh.h"
-#include "GrOpFlushState.h"
-#include "GrPathUtils.h"
-#include "GrShape.h"
-#include "GrSimpleMeshDrawOpHelper.h"
-#include "GrStyle.h"
-#include "GrSurfaceContextPriv.h"
-#include "SkGeometry.h"
-#include "SkString.h"
-#include "SkStrokeRec.h"
-#include "SkTLazy.h"
-#include "SkTraceEvent.h"
-#include "ops/GrMeshDrawOp.h"
+#include "include/core/SkString.h"
+#include "include/core/SkStrokeRec.h"
+#include "src/core/SkGeometry.h"
+#include "src/core/SkTLazy.h"
+#include "src/core/SkTraceEvent.h"
+#include "src/gpu/GrAuditTrail.h"
+#include "src/gpu/GrCaps.h"
+#include "src/gpu/GrDefaultGeoProcFactory.h"
+#include "src/gpu/GrDrawOpTest.h"
+#include "src/gpu/GrFixedClip.h"
+#include "src/gpu/GrMesh.h"
+#include "src/gpu/GrOpFlushState.h"
+#include "src/gpu/GrRenderTargetContextPriv.h"
+#include "src/gpu/GrStyle.h"
+#include "src/gpu/GrSurfaceContextPriv.h"
+#include "src/gpu/geometry/GrPathUtils.h"
+#include "src/gpu/geometry/GrShape.h"
+#include "src/gpu/ops/GrMeshDrawOp.h"
+#include "src/gpu/ops/GrSimpleMeshDrawOpHelper.h"
 
 GrDefaultPathRenderer::GrDefaultPathRenderer() {
 }
@@ -150,7 +151,7 @@ public:
 
         bool done = false;
         while (!done) {
-            SkPath::Verb verb = iter.next(pts, false);
+            SkPath::Verb verb = iter.next(pts);
             switch (verb) {
                 case SkPath::kMove_Verb:
                     this->moveTo(pts[0]);
@@ -182,7 +183,7 @@ public:
         SkPath::Verb verb;
 
         SkPoint pts[4];
-        while ((verb = iter.next(pts, false)) != SkPath::kDone_Verb) {
+        while ((verb = iter.next(pts)) != SkPath::kDone_Verb) {
             if (SkPath::kMove_Verb == verb && !first) {
                 return true;
             }
@@ -352,7 +353,7 @@ public:
 
     const char* name() const override { return "DefaultPathOp"; }
 
-    void visitProxies(const VisitProxyFunc& func, VisitorType) const override {
+    void visitProxies(const VisitProxyFunc& func) const override {
         fHelper.visitProxies(func);
     }
 
@@ -381,20 +382,22 @@ public:
             , fIsHairline(isHairline) {
         fPaths.emplace_back(PathData{path, tolerance});
 
-        this->setBounds(devBounds, HasAABloat::kNo,
-                        isHairline ? IsZeroArea::kYes : IsZeroArea::kNo);
+        HasAABloat aaBloat = (aaType == GrAAType::kNone) ? HasAABloat ::kNo : HasAABloat::kYes;
+        this->setBounds(devBounds, aaBloat,
+                        isHairline ? IsHairline::kYes : IsHairline::kNo);
     }
 
     FixedFunctionFlags fixedFunctionFlags() const override { return fHelper.fixedFunctionFlags(); }
 
-    GrProcessorSet::Analysis finalize(const GrCaps& caps, const GrAppliedClip* clip,
-                                      GrFSAAType fsaaType, GrClampType clampType) override {
+    GrProcessorSet::Analysis finalize(
+            const GrCaps& caps, const GrAppliedClip* clip, bool hasMixedSampledCoverage,
+            GrClampType clampType) override {
         GrProcessorAnalysisCoverage gpCoverage =
                 this->coverage() == 0xFF ? GrProcessorAnalysisCoverage::kNone
                                          : GrProcessorAnalysisCoverage::kSingleChannel;
         // This Op uses uniform (not vertex) color, so doesn't need to track wide color.
         return fHelper.finalizeProcessors(
-                caps, clip, fsaaType, clampType, gpCoverage, &fColor, nullptr);
+                caps, clip, hasMixedSampledCoverage, clampType, gpCoverage, &fColor, nullptr);
     }
 
 private:
@@ -585,9 +588,7 @@ bool GrDefaultPathRenderer::internalDrawPath(GrRenderTargetContext* renderTarget
     SkScalar srcSpaceTol = GrPathUtils::scaleToleranceToSrc(tol, viewMatrix, path.getBounds());
 
     SkRect devBounds;
-    GetPathDevBounds(path,
-                     renderTargetContext->asRenderTargetProxy()->worstCaseWidth(),
-                     renderTargetContext->asRenderTargetProxy()->worstCaseHeight(),
+    GetPathDevBounds(path, renderTargetContext->asRenderTargetProxy()->backingStoreDimensions(),
                      viewMatrix, &devBounds);
 
     for (int p = 0; p < passCount; ++p) {
@@ -613,10 +614,8 @@ bool GrDefaultPathRenderer::internalDrawPath(GrRenderTargetContext* renderTarget
                                                                                viewMatrix;
             // This is a non-coverage aa rect op since we assert aaType != kCoverage at the start
             assert_alive(paint);
-            renderTargetContext->addDrawOp(
-                    clip,
-                    GrFillRectOp::MakeWithLocalMatrix(context, std::move(paint), aaType, viewM,
-                                                      localMatrix, bounds, passes[p]));
+            renderTargetContext->priv().stencilRect(clip, passes[p], std::move(paint),
+                    GrAA(aaType == GrAAType::kMSAA), viewM, bounds, &localMatrix);
         } else {
             bool stencilPass = stencilOnly || passCount > 1;
             std::unique_ptr<GrDrawOp> op;
@@ -647,7 +646,7 @@ GrDefaultPathRenderer::onCanDrawPath(const CanDrawPathArgs& args) const {
         return CanDrawPath::kNo;
     }
     // If antialiasing is required, we only support MSAA.
-    if (AATypeFlags::kNone != args.fAATypeFlags && !(AATypeFlags::kMSAA & args.fAATypeFlags)) {
+    if (GrAAType::kNone != args.fAAType && GrAAType::kMSAA != args.fAAType) {
         return CanDrawPath::kNo;
     }
     // This can draw any path with any simple fill style.
@@ -661,9 +660,7 @@ GrDefaultPathRenderer::onCanDrawPath(const CanDrawPathArgs& args) const {
 bool GrDefaultPathRenderer::onDrawPath(const DrawPathArgs& args) {
     GR_AUDIT_TRAIL_AUTO_FRAME(args.fRenderTargetContext->auditTrail(),
                               "GrDefaultPathRenderer::onDrawPath");
-    GrAAType aaType = (AATypeFlags::kNone != args.fAATypeFlags)
-            ? GrAAType::kMSAA
-            : GrAAType::kNone;
+    GrAAType aaType = (GrAAType::kNone != args.fAAType) ? GrAAType::kMSAA : GrAAType::kNone;
 
     return this->internalDrawPath(
             args.fRenderTargetContext, std::move(args.fPaint), aaType, *args.fUserStencilSettings,
@@ -705,7 +702,7 @@ GR_DRAW_OP_TEST_DEFINE(DefaultPathOp) {
     viewMatrix.mapRect(&bounds);
     uint8_t coverage = GrRandomCoverage(random);
     GrAAType aaType = GrAAType::kNone;
-    if (GrFSAAType::kUnifiedMSAA == fsaaType && random->nextBool()) {
+    if (numSamples > 1 && random->nextBool()) {
         aaType = GrAAType::kMSAA;
     }
     return DefaultPathOp::Make(context, std::move(paint), path, srcSpaceTol, coverage, viewMatrix,

@@ -25,8 +25,8 @@ import (
 	"strings"
 	"sync"
 
-	"go.skia.org/infra/golden/go/goldingestion"
 	"go.skia.org/infra/golden/go/jsonio"
+	"go.skia.org/infra/golden/go/types"
 )
 
 // This allows us to use upload_dm_results.py out of the box
@@ -38,14 +38,14 @@ var (
 
 	botId            = flag.String("bot_id", "", "swarming bot id (deprecated/unused)")
 	browser          = flag.String("browser", "Chrome", "Browser Key")
-	buildBucketID    = flag.Int64("buildbucket_build_id", 0, "Buildbucket build id key")
+	buildBucketID    = flag.String("buildbucket_build_id", "", "Buildbucket build id key")
 	builder          = flag.String("builder", "", "Builder, like 'Test-Debian9-EMCC-GCE-CPU-AVX2-wasm-Debug-All-PathKit'")
 	compiledLanguage = flag.String("compiled_language", "wasm", "wasm or asm.js")
 	config           = flag.String("config", "Release", "Configuration (e.g. Debug/Release) key")
 	gitHash          = flag.String("git_hash", "-", "The git commit hash of the version being tested")
 	hostOS           = flag.String("host_os", "Debian9", "OS Key")
-	issue            = flag.Int64("issue", 0, "issue (if tryjob)")
-	patchset         = flag.Int64("patchset", 0, "patchset (if tryjob)")
+	issue            = flag.String("issue", "", "ChangeListID (if tryjob)")
+	patchset         = flag.Int("patchset", 0, "patchset (if tryjob)")
 	taskId           = flag.String("task_id", "", "swarming task id")
 	sourceType       = flag.String("source_type", "pathkit", "Gold Source type, like pathkit,canvaskit")
 )
@@ -132,9 +132,9 @@ func reporter(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resultsMutex.Lock()
- 	defer resultsMutex.Unlock()
+	defer resultsMutex.Unlock()
 	results = append(results, &jsonio.Result{
-		Digest: hash,
+		Digest: types.Digest(hash),
 		Key: map[string]string{
 			"name":   testOutput.TestName,
 			"config": testOutput.OutputType,
@@ -175,19 +175,18 @@ func dumpJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dmresults := goldingestion.DMResults{
-		GoldResults: &jsonio.GoldResults{
-			BuildBucketID: *buildBucketID,
-			Builder:       *builder,
-			GitHash:       *gitHash,
-			Issue:         *issue,
-			Key:           defaultKeys,
-			Patchset:      *patchset,
-			Results:       results,
-			TaskID:        *taskId,
-		},
+	dmresults := jsonio.GoldResults{
+		Builder:                     *builder,
+		ChangeListID:                *issue,
+		CodeReviewSystem:            "gerrit",
+		ContinuousIntegrationSystem: "buildbucket",
+		GitHash:                     *gitHash,
+		Key:                         defaultKeys,
+		PatchSetOrder:               *patchset,
+		Results:                     results,
+		TaskID:                      *taskId,
+		TryJobID:                    *buildBucketID,
 	}
-
 	enc := json.NewEncoder(outputFile)
 	enc.SetIndent("", "  ") // Make it human readable.
 	if err := enc.Encode(&dmresults); err != nil {

@@ -9,9 +9,9 @@
  * be overwritten.
  */
 
-#include "gl/GrGLAssembleInterface.h"
-#include "gl/GrGLAssembleHelpers.h"
-#include "gl/GrGLUtil.h"
+#include "include/gpu/gl/GrGLAssembleHelpers.h"
+#include "include/gpu/gl/GrGLAssembleInterface.h"
+#include "src/gpu/gl/GrGLUtil.h"
 
 #define GET_PROC(F) functions->f##F = (GrGL##F##Fn*)get(ctx, "gl" #F)
 #define GET_PROC_SUFFIX(F, S) functions->f##F = (GrGL##F##Fn*)get(ctx, "gl" #F #S)
@@ -181,6 +181,10 @@ sk_sp<const GrGLInterface> GrGLMakeAssembledWebGLInterface(void *ctx, GrGLGetPro
     }
 
     if (glVer >= GR_GL_VER(2,0)) {
+        GET_PROC(VertexAttribDivisor);
+    }
+
+    if (glVer >= GR_GL_VER(2,0)) {
         GET_PROC(VertexAttribIPointer);
     }
 
@@ -197,6 +201,10 @@ sk_sp<const GrGLInterface> GrGLMakeAssembledWebGLInterface(void *ctx, GrGLGetPro
     GET_PROC(GetFramebufferAttachmentParameteriv);
     GET_PROC(GetRenderbufferParameteriv);
     GET_PROC(RenderbufferStorage);
+
+    if (glVer >= GR_GL_VER(2,0)) {
+        GET_PROC(BlitFramebuffer);
+    }
 
     if (glVer >= GR_GL_VER(2,0)) {
         GET_PROC(RenderbufferStorageMultisample);
@@ -231,6 +239,6 @@ sk_sp<const GrGLInterface> GrGLMakeAssembledWebGLInterface(void *ctx, GrGLGetPro
     interface->fStandard = kWebGL_GrGLStandard;
     interface->fExtensions.swap(&extensions);
 
-    return std::move(interface);
+    return interface;
 }
 #endif

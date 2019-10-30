@@ -8,13 +8,12 @@
 #ifndef ParticlesSlide_DEFINED
 #define ParticlesSlide_DEFINED
 
-#include "Slide.h"
+#include "tools/viewer/Slide.h"
 
-#include "SkPath.h"
-#include "SkRandom.h"
-#include "SkTArray.h"
+#include "include/core/SkPath.h"
+#include "include/private/SkTArray.h"
+#include "include/utils/SkRandom.h"
 
-class AnimTimer;
 class SkParticleEffect;
 class SkParticleEffectParams;
 
@@ -27,16 +26,17 @@ public:
 
     void load(SkScalar winWidth, SkScalar winHeight) override;
     void draw(SkCanvas* canvas) override;
-    bool animate(const AnimTimer& timer) override;
+    bool animate(double) override;
 
-    bool onMouse(SkScalar x, SkScalar y, sk_app::Window::InputState state,
-                 uint32_t modifiers) override;
+    bool onMouse(SkScalar x, SkScalar y, skui::InputState state,
+                 skui::ModifierKey modifiers) override;
 
 private:
     void loadEffects(const char* dirname);
 
     SkRandom fRandom;
-    const AnimTimer* fTimer;
+    bool fAnimated = false;
+    double fAnimationTime = 0;
     SkPoint fPlayPosition;
 
     struct LoadedEffect {
@@ -49,6 +49,7 @@ private:
         SkPoint fPosition;
         SkString fName;
         sk_sp<SkParticleEffect> fEffect;
+        bool fTrackMouse;
     };
     SkTArray<RunningEffect> fRunning;
 };

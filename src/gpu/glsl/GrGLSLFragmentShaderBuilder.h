@@ -8,9 +8,10 @@
 #ifndef GrGLSLFragmentShaderBuilder_DEFINED
 #define GrGLSLFragmentShaderBuilder_DEFINED
 
-#include "GrBlend.h"
-#include "GrGLSLShaderBuilder.h"
-#include "GrProcessor.h"
+#include "src/gpu/GrBlend.h"
+#include "src/gpu/GrProcessor.h"
+#include "src/gpu/glsl/GrGLSLFragmentProcessor.h"
+#include "src/gpu/glsl/GrGLSLShaderBuilder.h"
 
 class GrRenderTarget;
 class GrGLSLVarying;
@@ -96,6 +97,9 @@ public:
      */
     virtual void onBeforeChildProcEmitCode() = 0;
     virtual void onAfterChildProcEmitCode() = 0;
+
+    virtual SkString writeProcessorFunction(GrGLSLFragmentProcessor* fp,
+                                            GrGLSLFragmentProcessor::EmitArgs& args);
 
     virtual const SkString& getMangleString() const = 0;
 

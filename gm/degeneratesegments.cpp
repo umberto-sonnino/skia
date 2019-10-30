@@ -4,31 +4,35 @@
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
-#include "SkCanvas.h"
-#include "SkPaint.h"
-#include "SkPath.h"
-#include "SkRandom.h"
-#include "ToolUtils.h"
-#include "gm.h"
+
+#include "gm/gm.h"
+#include "include/core/SkCanvas.h"
+#include "include/core/SkColor.h"
+#include "include/core/SkFont.h"
+#include "include/core/SkPaint.h"
+#include "include/core/SkPath.h"
+#include "include/core/SkPoint.h"
+#include "include/core/SkRect.h"
+#include "include/core/SkScalar.h"
+#include "include/core/SkSize.h"
+#include "include/core/SkString.h"
+#include "include/core/SkTypeface.h"
+#include "include/core/SkTypes.h"
+#include "include/utils/SkRandom.h"
+#include "tools/ToolUtils.h"
 
 namespace skiagm {
 
 class DegenerateSegmentsGM : public GM {
-public:
-    DegenerateSegmentsGM() {}
-
-protected:
     struct PathAndName {
         SkPath      fPath;
         const char* fName1;
         const char* fName2;
     };
 
-    SkString onShortName() {
-        return SkString("degeneratesegments");
-    }
+    SkString onShortName() override { return SkString("degeneratesegments"); }
 
-    SkISize onISize() { return SkISize::Make(896, 930); }
+    SkISize onISize() override { return {896, 930}; }
 
     typedef SkPoint (*AddSegmentFunc)(SkPath&, SkPoint&);
 
@@ -208,53 +212,53 @@ protected:
         canvas->restore();
     }
 
-    virtual void onDraw(SkCanvas* canvas) {
-    constexpr AddSegmentFunc gSegmentFunctions[] = {
-        AddMove,
-        AddMoveClose,
-        AddDegenLine,
-        AddMoveDegenLine,
-        AddMoveDegenLineClose,
-        AddDegenQuad,
-        AddMoveDegenQuad,
-        AddMoveDegenQuadClose,
-        AddDegenCubic,
-        AddMoveDegenCubic,
-        AddMoveDegenCubicClose,
-        AddClose,
-        AddLine,
-        AddMoveLine,
-        AddMoveLineClose,
-        AddQuad,
-        AddMoveQuad,
-        AddMoveQuadClose,
-        AddCubic,
-        AddMoveCubic,
-        AddMoveCubicClose
-    };
-    const char* gSegmentNames[] = {
-        "Move",
-        "MoveClose",
-        "DegenLine",
-        "MoveDegenLine",
-        "MoveDegenLineClose",
-        "DegenQuad",
-        "MoveDegenQuad",
-        "MoveDegenQuadClose",
-        "DegenCubic",
-        "MoveDegenCubic",
-        "MoveDegenCubicClose",
-        "Close",
-        "Line",
-        "MoveLine",
-        "MoveLineClose",
-        "Quad",
-        "MoveQuad",
-        "MoveQuadClose",
-        "Cubic",
-        "MoveCubic",
-        "MoveCubicClose"
-    };
+    void onDraw(SkCanvas* canvas) override {
+        constexpr AddSegmentFunc gSegmentFunctions[] = {
+            AddMove,
+            AddMoveClose,
+            AddDegenLine,
+            AddMoveDegenLine,
+            AddMoveDegenLineClose,
+            AddDegenQuad,
+            AddMoveDegenQuad,
+            AddMoveDegenQuadClose,
+            AddDegenCubic,
+            AddMoveDegenCubic,
+            AddMoveDegenCubicClose,
+            AddClose,
+            AddLine,
+            AddMoveLine,
+            AddMoveLineClose,
+            AddQuad,
+            AddMoveQuad,
+            AddMoveQuadClose,
+            AddCubic,
+            AddMoveCubic,
+            AddMoveCubicClose
+        };
+        const char* gSegmentNames[] = {
+            "Move",
+            "MoveClose",
+            "DegenLine",
+            "MoveDegenLine",
+            "MoveDegenLineClose",
+            "DegenQuad",
+            "MoveDegenQuad",
+            "MoveDegenQuadClose",
+            "DegenCubic",
+            "MoveDegenCubic",
+            "MoveDegenCubicClose",
+            "Close",
+            "Line",
+            "MoveLine",
+            "MoveLineClose",
+            "Quad",
+            "MoveQuad",
+            "MoveQuadClose",
+            "Cubic",
+            "MoveCubic",
+            "MoveCubicClose"
+        };
 
         struct FillAndName {
             SkPath::FillType fFill;
@@ -360,9 +364,6 @@ protected:
         canvas->restore();
         canvas->restore();
     }
-
-private:
-    typedef GM INHERITED;
 };
 
 //////////////////////////////////////////////////////////////////////////////

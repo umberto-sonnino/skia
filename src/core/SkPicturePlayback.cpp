@@ -5,21 +5,21 @@
  * found in the LICENSE file.
  */
 
-#include "SkCanvas.h"
-#include "SkCanvasPriv.h"
-#include "SkDrawShadowInfo.h"
-#include "SkFontPriv.h"
-#include "SkPaintPriv.h"
-#include "SkPatchUtils.h"
-#include "SkPictureData.h"
-#include "SkPicturePlayback.h"
-#include "SkPictureRecord.h"
-#include "SkReadBuffer.h"
-#include "SkRSXform.h"
-#include "SkSafeMath.h"
-#include "SkTextBlob.h"
-#include "SkTDArray.h"
-#include "SkTypes.h"
+#include "include/core/SkCanvas.h"
+#include "include/core/SkRSXform.h"
+#include "include/core/SkTextBlob.h"
+#include "include/core/SkTypes.h"
+#include "include/private/SkTDArray.h"
+#include "src/core/SkCanvasPriv.h"
+#include "src/core/SkDrawShadowInfo.h"
+#include "src/core/SkFontPriv.h"
+#include "src/core/SkPaintPriv.h"
+#include "src/core/SkPictureData.h"
+#include "src/core/SkPicturePlayback.h"
+#include "src/core/SkPictureRecord.h"
+#include "src/core/SkReadBuffer.h"
+#include "src/core/SkSafeMath.h"
+#include "src/utils/SkPatchUtils.h"
 
 // matches old SkCanvas::SaveFlags
 enum LegacySaveFlags {
@@ -278,7 +278,13 @@ void SkPicturePlayback::handleOp(SkReadBuffer* reader,
             SkRect rect;
             reader->readRect(&rect);
             SkCanvas::QuadAAFlags aaFlags = static_cast<SkCanvas::QuadAAFlags>(reader->read32());
-            SkColor color = reader->read32();
+            SkColor4f color;
+            if (reader->isVersionLT(SkPicturePriv::kEdgeAAQuadColor4f_Version)) {
+                // Old version stored color as 8888
+                color = SkColor4f::FromColor(reader->read32());
+            } else {
+                reader->readColor4f(&color);
+            }
             SkBlendMode blend = static_cast<SkBlendMode>(reader->read32());
             bool hasClip = reader->readInt();
             SkPoint* clip = nullptr;
@@ -419,6 +425,14 @@ void SkPicturePlayback::handleOp(SkReadBuffer* reader,
                 canvas->drawPaint(*paint);
             }
         } break;
+        case DRAW_BEHIND_PAINT: {
+            const SkPaint* paint = fPictureData->getPaint(reader);
+            BREAK_ON_READ_ERROR(reader);
+
+            if (paint) {
+                SkCanvasPriv::DrawBehind(canvas, *paint);
+            }
+        } break;
         case DRAW_PATCH: {
             const SkPaint* paint = fPictureData->getPaint(reader);
 
@@ -518,7 +532,7 @@ void SkPicturePlayback::handleOp(SkReadBuffer* reader,
             reader->readPoint3(&rec.fZPlaneParams);
             reader->readPoint3(&rec.fLightPos);
             rec.fLightRadius = reader->readScalar();
-            if (reader->isVersionLT(SkReadBuffer::kTwoColorDrawShadow_Version)) {
+            if (reader->isVersionLT(SkPicturePriv::kTwoColorDrawShadow_Version)) {
                 SkScalar ambientAlpha = reader->readScalar();
                 SkScalar spotAlpha = reader->readScalar();
                 SkColor color = reader->read32();

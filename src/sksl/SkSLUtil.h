@@ -12,16 +12,14 @@
 #include <memory>
 #include "stdlib.h"
 #include "string.h"
-#include "SkSLLexer.h"
-#include "SkSLDefines.h"
-#include "SkSLString.h"
-#include "SkSLStringStream.h"
+#include "src/sksl/SkSLDefines.h"
+#include "src/sksl/SkSLLexer.h"
 
 #ifndef SKSL_STANDALONE
-#include "SkTypes.h"
+#include "include/core/SkTypes.h"
 #if SK_SUPPORT_GPU
-#include "GrContextOptions.h"
-#include "GrShaderCaps.h"
+#include "include/gpu/GrContextOptions.h"
+#include "src/gpu/GrShaderCaps.h"
 #endif // SK_SUPPORT_GPU
 #endif // SKSL_STANDALONE
 
@@ -31,10 +29,6 @@ namespace SkSL {
 
 class OutputStream;
 class StringStream;
-
-#ifdef SKSL_STANDALONE
-#define SK_API
-#endif
 
 #if defined(SKSL_STANDALONE) || !SK_SUPPORT_GPU
 
@@ -90,10 +84,6 @@ public:
         return false;
     }
 
-    bool dropsTileOnZeroDivide() const {
-        return false;
-    }
-
     bool flatInterpolationSupport() const {
         return true;
     }
@@ -114,10 +104,6 @@ public:
         return true;
     }
 
-    bool imageLoadStoreSupport() const {
-        return true;
-    }
-
     bool mustDoOpBetweenFloorAndAbs() const {
         return false;
     }
@@ -131,6 +117,10 @@ public:
     }
 
     bool canUseAnyFunctionInShader() const {
+        return false;
+    }
+
+    bool noDefaultPrecisionForExternalSamplers() const {
         return false;
     }
 
@@ -151,10 +141,6 @@ public:
     }
 
     const char* fragCoordConventionsExtensionString() const {
-        return nullptr;
-    }
-
-    const char* imageLoadStoreExtensionString() const {
         return nullptr;
     }
 
@@ -338,7 +324,6 @@ public:
         result->fVersionDeclString = "#version 400";
         result->fExternalTextureSupport = true;
         result->fFBFetchSupport = false;
-        result->fDropsTileOnZeroDivide = true;
         result->fCanUseAnyFunctionInShader = false;
         return result;
     }
@@ -390,6 +375,12 @@ public:
         sk_sp<GrShaderCaps> result = sk_make_sp<GrShaderCaps>(GrContextOptions());
         result->fVersionDeclString = "#version 400";
         result->fRemovePowWithConstantExponent = true;
+        return result;
+    }
+
+    static sk_sp<GrShaderCaps> SampleMaskSupport() {
+        sk_sp<GrShaderCaps> result = Default();
+        result->fSampleVariablesSupport = true;
         return result;
     }
 };

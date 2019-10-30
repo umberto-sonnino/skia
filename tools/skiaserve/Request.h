@@ -8,16 +8,16 @@
 #ifndef Request_DEFINED
 #define Request_DEFINED
 
-#include "SkTypes.h"
+#include "include/core/SkTypes.h"
 
-#include "GrContextFactory.h"
+#include "tools/gpu/GrContextFactory.h"
 
-#include "DebugCanvas.h"
-#include "SkPicture.h"
-#include "SkStream.h"
-#include "SkSurface.h"
+#include "include/core/SkPicture.h"
+#include "include/core/SkStream.h"
+#include "include/core/SkSurface.h"
+#include "tools/debugger/DebugCanvas.h"
 
-#include "UrlDataManager.h"
+#include "tools/UrlDataManager.h"
 
 namespace sk_gpu_test {
 class GrContextFactory;
@@ -51,7 +51,7 @@ struct Request {
     sk_sp<SkData> getJsonOps(int n);
 
     // Returns a json list of ops as an SkData
-    sk_sp<SkData> getJsonOpList(int n);
+    sk_sp<SkData> getJsonOpsTask(int n);
 
     // Returns json with the viewMatrix and clipRect
     sk_sp<SkData> getJsonInfo(int n);

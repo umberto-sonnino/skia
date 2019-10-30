@@ -8,7 +8,7 @@
 #ifndef SkCanvasVirtualEnforcer_DEFINED
 #define SkCanvasVirtualEnforcer_DEFINED
 
-#include "SkCanvas.h"
+#include "include/core/SkCanvas.h"
 
 // If you would ordinarily want to inherit from Base (eg SkCanvas, SkNWayCanvas), instead
 // inherit from SkCanvasVirtualEnforcer<Base>, which will make the build fail if you forget
@@ -20,6 +20,7 @@ public:
 
 protected:
     void onDrawPaint(const SkPaint& paint) override = 0;
+    void onDrawBehind(const SkPaint&) override {} // make zero after android updates
     void onDrawRect(const SkRect& rect, const SkPaint& paint) override = 0;
     void onDrawRRect(const SkRRect& rrect, const SkPaint& paint) override = 0;
     void onDrawDRRect(const SkRRect& outer, const SkRRect& inner,
@@ -54,13 +55,13 @@ protected:
     // This is under active development for Chrome and not used in Android. Hold off on adding
     // implementations in Android's SkCanvas subclasses until this stabilizes.
     void onDrawEdgeAAQuad(const SkRect& rect, const SkPoint clip[4],
-            SkCanvas::QuadAAFlags aaFlags, SkColor color, SkBlendMode mode) override {}
+            SkCanvas::QuadAAFlags aaFlags, const SkColor4f& color, SkBlendMode mode) override {}
     void onDrawEdgeAAImageSet(const SkCanvas::ImageSetEntry imageSet[], int count,
             const SkPoint dstClips[], const SkMatrix preViewMatrices[], const SkPaint* paint,
             SkCanvas::SrcRectConstraint constraint) override {}
 #else
     void onDrawEdgeAAQuad(const SkRect& rect, const SkPoint clip[4],
-            SkCanvas::QuadAAFlags aaFlags, SkColor color, SkBlendMode mode) override = 0;
+            SkCanvas::QuadAAFlags aaFlags, const SkColor4f& color, SkBlendMode mode) override = 0;
     void onDrawEdgeAAImageSet(const SkCanvas::ImageSetEntry imageSet[], int count,
             const SkPoint dstClips[], const SkMatrix preViewMatrices[], const SkPaint* paint,
             SkCanvas::SrcRectConstraint constraint) override = 0;

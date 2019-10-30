@@ -5,25 +5,52 @@
  * found in the LICENSE file.
  */
 
-#include "SkTextUtils.h"
-#include "ToolUtils.h"
-#include "gm.h"
+#include "gm/gm.h"
+#include "include/core/SkBlendMode.h"
+#include "include/core/SkCanvas.h"
+#include "include/core/SkColor.h"
+#include "include/core/SkMatrix.h"
+#include "include/core/SkPoint.h"
+#include "include/core/SkRect.h"
+#include "include/core/SkRefCnt.h"
+#include "include/core/SkString.h"
+#include "include/gpu/GrContext.h"
+#include "include/private/GrRecordingContext.h"
+#include "include/private/GrTypesPriv.h"
+#include "src/gpu/GrBuffer.h"
+#include "src/gpu/GrCaps.h"
+#include "src/gpu/GrContextPriv.h"
+#include "src/gpu/GrGeometryProcessor.h"
+#include "src/gpu/GrGpuBuffer.h"
+#include "src/gpu/GrMemoryPool.h"
+#include "src/gpu/GrMesh.h"
+#include "src/gpu/GrOpFlushState.h"
+#include "src/gpu/GrOpsRenderPass.h"
+#include "src/gpu/GrPipeline.h"
+#include "src/gpu/GrPrimitiveProcessor.h"
+#include "src/gpu/GrProcessor.h"
+#include "src/gpu/GrProcessorSet.h"
+#include "src/gpu/GrProgramInfo.h"
+#include "src/gpu/GrRecordingContextPriv.h"
+#include "src/gpu/GrRenderTargetContext.h"
+#include "src/gpu/GrRenderTargetContextPriv.h"
+#include "src/gpu/GrResourceProvider.h"
+#include "src/gpu/GrShaderCaps.h"
+#include "src/gpu/GrShaderVar.h"
+#include "src/gpu/glsl/GrGLSLFragmentShaderBuilder.h"
+#include "src/gpu/glsl/GrGLSLGeometryProcessor.h"
+#include "src/gpu/glsl/GrGLSLPrimitiveProcessor.h"
+#include "src/gpu/glsl/GrGLSLProgramDataManager.h"
+#include "src/gpu/glsl/GrGLSLUniformHandler.h"
+#include "src/gpu/glsl/GrGLSLVarying.h"
+#include "src/gpu/glsl/GrGLSLVertexGeoBuilder.h"
+#include "src/gpu/ops/GrDrawOp.h"
+#include "src/gpu/ops/GrOp.h"
 
-#if SK_SUPPORT_GPU
+#include <memory>
+#include <utility>
 
-#include "GrContext.h"
-#include "GrContextPriv.h"
-#include "GrGpuCommandBuffer.h"
-#include "GrMemoryPool.h"
-#include "GrOpFlushState.h"
-#include "GrRecordingContext.h"
-#include "GrRecordingContextPriv.h"
-#include "GrRenderTargetContext.h"
-#include "GrRenderTargetContextPriv.h"
-#include "glsl/GrGLSLFragmentShaderBuilder.h"
-#include "glsl/GrGLSLGeometryProcessor.h"
-#include "glsl/GrGLSLVarying.h"
-#include "glsl/GrGLSLVertexGeoBuilder.h"
+class GrAppliedClip;
 
 /**
  * This test ensures that fwidth() works properly on GPU configs by drawing a squircle.
@@ -121,37 +148,50 @@ private:
     FwidthSquircleTestOp(const SkMatrix& viewMatrix)
             : GrDrawOp(ClassID())
             , fViewMatrix(viewMatrix) {
-        this->setBounds(SkRect::MakeIWH(200, 200), HasAABloat::kNo, IsZeroArea::kNo);
+        this->setBounds(SkRect::MakeIWH(kWidth, kHeight), HasAABloat::kNo, IsHairline::kNo);
     }
 
-    const char* name() const override { return "ClockwiseTestOp"; }
+    const char* name() const override { return "FwidthSquircleTestOp"; }
     FixedFunctionFlags fixedFunctionFlags() const override { return FixedFunctionFlags::kNone; }
     GrProcessorSet::Analysis finalize(
-            const GrCaps&, const GrAppliedClip*, GrFSAAType, GrClampType) override {
+            const GrCaps&, const GrAppliedClip*, bool hasMixedSampledCoverage, GrClampType) override {
         return GrProcessorSet::EmptySetAnalysis();
     }
-    void onPrepare(GrOpFlushState*) override {}
-    void onExecute(GrOpFlushState* flushState, const SkRect& chainBounds) override {
+    void onPrepare(GrOpFlushState* flushState) override {
         SkPoint vertices[4] = {
             {-1, -1},
             {+1, -1},
             {-1, +1},
             {+1, +1},
         };
-        sk_sp<const GrBuffer> vertexBuffer(flushState->resourceProvider()->createBuffer(
-                sizeof(vertices), GrGpuBufferType::kVertex, kStatic_GrAccessPattern, vertices));
-        if (!vertexBuffer) {
+        fVertexBuffer = flushState->resourceProvider()->createBuffer(
+                sizeof(vertices), GrGpuBufferType::kVertex, kStatic_GrAccessPattern, vertices);
+    }
+    void onExecute(GrOpFlushState* flushState, const SkRect& chainBounds) override {
+        if (!fVertexBuffer) {
             return;
         }
-        GrPipeline pipeline(GrScissorTest::kDisabled, SkBlendMode::kSrcOver);
+        GrPipeline pipeline(GrScissorTest::kDisabled, SkBlendMode::kSrcOver,
+                            flushState->drawOpArgs().outputSwizzle());
+
+        FwidthSquircleTestProcessor primProc(fViewMatrix);
+
+        GrProgramInfo programInfo(flushState->drawOpArgs().numSamples(),
+                                  flushState->drawOpArgs().origin(),
+                                  pipeline,
+                                  primProc,
+                                  nullptr, nullptr, 0);
+
         GrMesh mesh(GrPrimitiveType::kTriangleStrip);
         mesh.setNonIndexedNonInstanced(4);
-        mesh.setVertexData(std::move(vertexBuffer));
-        flushState->rtCommandBuffer()->draw(FwidthSquircleTestProcessor(fViewMatrix), pipeline,
-                                            nullptr, nullptr, &mesh, 1, SkRect::MakeIWH(100, 100));
+        mesh.setVertexData(std::move(fVertexBuffer));
+        flushState->opsRenderPass()->draw(programInfo, &mesh, 1, SkRect::MakeIWH(kWidth, kHeight));
     }
 
+    sk_sp<GrBuffer> fVertexBuffer;
     const SkMatrix fViewMatrix;
+    static const int kWidth = 200;
+    static const int kHeight = 200;
 
     friend class ::GrOpMemoryPool; // for ctor
 };
@@ -172,5 +212,3 @@ DEF_SIMPLE_GPU_GM_CAN_FAIL(fwidth_squircle, ctx, rtc, canvas, errorMsg, 200, 200
 }
 
 }
-
-#endif  // SK_SUPPORT_GPU

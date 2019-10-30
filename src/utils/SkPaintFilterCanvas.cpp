@@ -5,12 +5,12 @@
  * found in the LICENSE file.
  */
 
-#include "SkPaintFilterCanvas.h"
+#include "include/utils/SkPaintFilterCanvas.h"
 
-#include "SkPaint.h"
-#include "SkPixmap.h"
-#include "SkSurface.h"
-#include "SkTLazy.h"
+#include "include/core/SkPaint.h"
+#include "include/core/SkPixmap.h"
+#include "include/core/SkSurface.h"
+#include "src/core/SkTLazy.h"
 
 class SkPaintFilterCanvas::AutoPaintFilter {
 public:
@@ -31,20 +31,6 @@ private:
     bool fShouldDraw;
 };
 
-bool SkPaintFilterCanvas::onFilter(SkTCopyOnFirstWrite<SkPaint>* paint, Type type) const {
-    SK_ABORT("Not reached");
-    return false;
-}
-
-bool SkPaintFilterCanvas::onFilter(SkPaint& paint) const {
-    SkTCopyOnFirstWrite<SkPaint> p(paint);
-    bool shouldDraw = this->onFilter(&p, kPicture_Type);
-    if (p.get() != &paint) {
-        paint = *p;
-    }
-    return shouldDraw;
-}
-
 SkPaintFilterCanvas::SkPaintFilterCanvas(SkCanvas *canvas)
     : SkCanvasVirtualEnforcer<SkNWayCanvas>(canvas->imageInfo().width(),
                                               canvas->imageInfo().height()) {
@@ -60,6 +46,13 @@ void SkPaintFilterCanvas::onDrawPaint(const SkPaint& paint) {
     AutoPaintFilter apf(this, paint);
     if (apf.shouldDraw()) {
         this->SkNWayCanvas::onDrawPaint(apf.paint());
+    }
+}
+
+void SkPaintFilterCanvas::onDrawBehind(const SkPaint& paint) {
+    AutoPaintFilter apf(this, paint);
+    if (apf.shouldDraw()) {
+        this->SkNWayCanvas::onDrawBehind(apf.paint());
     }
 }
 
@@ -249,13 +242,13 @@ void SkPaintFilterCanvas::onDrawShadowRec(const SkPath& path, const SkDrawShadow
 }
 
 void SkPaintFilterCanvas::onDrawEdgeAAQuad(const SkRect& rect, const SkPoint clip[4],
-                                           QuadAAFlags aa, SkColor color, SkBlendMode mode) {
+                                           QuadAAFlags aa, const SkColor4f& color, SkBlendMode mode) {
     SkPaint paint;
     paint.setColor(color);
     paint.setBlendMode(mode);
     AutoPaintFilter apf(this, paint);
     if (apf.shouldDraw()) {
-        this->SkNWayCanvas::onDrawEdgeAAQuad(rect, clip, aa, apf.paint().getColor(),
+        this->SkNWayCanvas::onDrawEdgeAAQuad(rect, clip, aa, apf.paint().getColor4f(),
                                              apf.paint().getBlendMode());
     }
 }

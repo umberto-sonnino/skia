@@ -5,11 +5,25 @@
  * found in the LICENSE file.
  */
 
-#include "SkAAClip.h"
-#include "SkCanvas.h"
-#include "SkPath.h"
-#include "ToolUtils.h"
-#include "gm.h"
+#include "gm/gm.h"
+#include "include/core/SkBitmap.h"
+#include "include/core/SkCanvas.h"
+#include "include/core/SkClipOp.h"
+#include "include/core/SkColor.h"
+#include "include/core/SkFont.h"
+#include "include/core/SkPaint.h"
+#include "include/core/SkPath.h"
+#include "include/core/SkRect.h"
+#include "include/core/SkRegion.h"
+#include "include/core/SkScalar.h"
+#include "include/core/SkSize.h"
+#include "include/core/SkString.h"
+#include "include/core/SkTypeface.h"
+#include "include/core/SkTypes.h"
+#include "src/core/SkAAClip.h"
+#include "src/core/SkClipOpPriv.h"
+#include "src/core/SkMask.h"
+#include "tools/ToolUtils.h"
 
 namespace skiagm {
 
@@ -55,10 +69,10 @@ public:
 protected:
     void onOnceBeforeDraw() override {
         // offset the rects a bit so we get anti-aliasing in the rect case
-        fBase.set(100.65f,
-                  100.65f,
-                  150.65f,
-                  150.65f);
+        fBase.setLTRB(100.65f,
+                      100.65f,
+                      150.65f,
+                      150.65f);
         fRect = fBase;
         fRect.inset(5, 5);
         fRect.offset(25, 25);

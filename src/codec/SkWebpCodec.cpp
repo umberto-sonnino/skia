@@ -5,19 +5,20 @@
  * found in the LICENSE file.
  */
 
-#include "SkWebpCodec.h"
+#include "src/codec/SkWebpCodec.h"
 
-#include "SkBitmap.h"
-#include "SkCanvas.h"
-#include "SkCodecAnimation.h"
-#include "SkCodecAnimationPriv.h"
-#include "SkCodecPriv.h"
-#include "SkMakeUnique.h"
-#include "SkRasterPipeline.h"
-#include "SkSampler.h"
-#include "SkStreamPriv.h"
-#include "SkTemplates.h"
-#include "SkTo.h"
+#include "include/codec/SkCodecAnimation.h"
+#include "include/core/SkBitmap.h"
+#include "include/core/SkCanvas.h"
+#include "include/private/SkTemplates.h"
+#include "include/private/SkTo.h"
+#include "src/codec/SkCodecAnimationPriv.h"
+#include "src/codec/SkCodecPriv.h"
+#include "src/codec/SkParseEncodedOrigin.h"
+#include "src/codec/SkSampler.h"
+#include "src/core/SkMakeUnique.h"
+#include "src/core/SkRasterPipeline.h"
+#include "src/core/SkStreamPriv.h"
 
 // A WebP decoder on top of (subset of) libwebp
 // For more information on WebP image format, and libwebp library, see:
@@ -106,7 +107,7 @@ std::unique_ptr<SkCodec> SkWebpCodec::MakeFromStream(std::unique_ptr<SkStream> s
         WebPChunkIterator chunkIterator;
         SkAutoTCallVProc<WebPChunkIterator, WebPDemuxReleaseChunkIterator> autoCI(&chunkIterator);
         if (WebPDemuxGetChunk(demux, "EXIF", 1, &chunkIterator)) {
-            is_orientation_marker(chunkIterator.chunk.bytes, chunkIterator.chunk.size, &origin);
+            SkParseEncodedOrigin(chunkIterator.chunk.bytes, chunkIterator.chunk.size, &origin);
         }
     }
 
@@ -390,7 +391,7 @@ SkCodec::Result SkWebpCodec::onGetPixels(const SkImageInfo& dstInfo, void* dst, 
         SkASSERT(SkIsAlign2(subset.fLeft) && SkIsAlign2(subset.fTop));
         SkASSERT(this->getValidSubset(&subset) && subset == *options.fSubset);
 
-        if (!SkIRect::IntersectsNoEmptyCheck(subset, frameRect)) {
+        if (!SkIRect::Intersects(subset, frameRect)) {
             return kSuccess;
         }
 

@@ -8,12 +8,12 @@
 #ifndef GrSimpleMeshDrawOpHelper_DEFINED
 #define GrSimpleMeshDrawOpHelper_DEFINED
 
-#include "GrMemoryPool.h" // only here bc of the templated FactoryHelper
-#include "GrMeshDrawOp.h"
-#include "GrOpFlushState.h"
-#include "GrPipeline.h"
-#include "GrRecordingContext.h"
-#include "GrRecordingContextPriv.h"
+#include "include/private/GrRecordingContext.h"
+#include "src/gpu/GrMemoryPool.h"
+#include "src/gpu/GrOpFlushState.h"
+#include "src/gpu/GrPipeline.h"
+#include "src/gpu/GrRecordingContextPriv.h"
+#include "src/gpu/ops/GrMeshDrawOp.h"
 #include <new>
 
 struct SkRect;
@@ -27,6 +27,11 @@ struct SkRect;
 class GrSimpleMeshDrawOpHelper {
 public:
     struct MakeArgs;
+
+    static bool CanUpgradeAAOnMerge(GrAAType aa1, GrAAType aa2) {
+        return (aa1 == GrAAType::kNone && aa2 == GrAAType::kCoverage) ||
+               (aa1 == GrAAType::kCoverage && aa2 == GrAAType::kNone);
+    }
 
     /**
      * This can be used by a Op class to perform allocation and initialization such that a
@@ -54,10 +59,9 @@ public:
 
     GrDrawOp::FixedFunctionFlags fixedFunctionFlags() const;
 
-    // noneAACompatibleWithCoverage should be set to true if the op can properly render a non-AA
-    // primitive merged into a coverage-based op.
+    // ignoreAAType should be set to true if the op already knows the AA settings are acceptible
     bool isCompatible(const GrSimpleMeshDrawOpHelper& that, const GrCaps&, const SkRect& thisBounds,
-                      const SkRect& thatBounds, bool noneAACompatibleWithCoverage = false) const;
+                      const SkRect& thatBounds, bool ignoreAAType = false) const;
 
     /**
      * Finalizes the processor set and determines whether the destination must be provided
@@ -70,11 +74,12 @@ public:
      *                      color from its geometry processor instead.
      */
     GrProcessorSet::Analysis finalizeProcessors(
-            const GrCaps& caps, const GrAppliedClip* clip, GrFSAAType fsaaType,
+            const GrCaps& caps, const GrAppliedClip* clip, bool hasMixedSampledCoverage,
             GrClampType clampType, GrProcessorAnalysisCoverage geometryCoverage,
             GrProcessorAnalysisColor* geometryColor) {
-        return this->finalizeProcessors(caps, clip, &GrUserStencilSettings::kUnused, fsaaType,
-                                        clampType, geometryCoverage, geometryColor);
+        return this->finalizeProcessors(
+                caps, clip, &GrUserStencilSettings::kUnused, hasMixedSampledCoverage, clampType,
+                geometryCoverage, geometryColor);
     }
 
     /**
@@ -83,7 +88,7 @@ public:
      * changed the op must override its geometry processor color output with the new color.
      */
     GrProcessorSet::Analysis finalizeProcessors(
-            const GrCaps&, const GrAppliedClip*, GrFSAAType, GrClampType,
+            const GrCaps&, const GrAppliedClip*, bool hasMixedSampledCoverage, GrClampType,
             GrProcessorAnalysisCoverage geometryCoverage, SkPMColor4f* geometryColor,
             bool* wideColor);
 
@@ -107,7 +112,7 @@ public:
         friend class GrSimpleMeshDrawOpHelper;
     };
 
-    void visitProxies(const std::function<void(GrSurfaceProxy*)>& func) const {
+    void visitProxies(const GrOp::VisitProxyFunc& func) const {
         if (fProcessors) {
             fProcessors->visitProxies(func);
         }
@@ -128,8 +133,8 @@ protected:
     GrPipeline::InputFlags pipelineFlags() const { return fPipelineFlags; }
 
     GrProcessorSet::Analysis finalizeProcessors(
-            const GrCaps& caps, const GrAppliedClip*, const GrUserStencilSettings*, GrFSAAType,
-            GrClampType, GrProcessorAnalysisCoverage geometryCoverage,
+            const GrCaps& caps, const GrAppliedClip*, const GrUserStencilSettings*,
+            bool hasMixedSampledCoverage, GrClampType, GrProcessorAnalysisCoverage geometryCoverage,
             GrProcessorAnalysisColor* geometryColor);
 
     GrProcessorSet* fProcessors;
@@ -167,17 +172,18 @@ public:
     GrDrawOp::FixedFunctionFlags fixedFunctionFlags() const;
 
     GrProcessorSet::Analysis finalizeProcessors(
-            const GrCaps& caps, const GrAppliedClip* clip, GrFSAAType fsaaType,
+            const GrCaps& caps, const GrAppliedClip* clip, bool hasMixedSampledCoverage,
             GrClampType clampType, GrProcessorAnalysisCoverage geometryCoverage,
             GrProcessorAnalysisColor* geometryColor) {
         return this->INHERITED::finalizeProcessors(
-                caps, clip, fStencilSettings, fsaaType, clampType, geometryCoverage, geometryColor);
+                caps, clip, fStencilSettings, hasMixedSampledCoverage, clampType, geometryCoverage,
+                geometryColor);
     }
 
     GrProcessorSet::Analysis finalizeProcessors(
-            const GrCaps&, const GrAppliedClip*, GrFSAAType, GrClampType,
-            GrProcessorAnalysisCoverage geometryCoverage, SkPMColor4f* geometryColor,
-            bool* wideColor);
+            const GrCaps&, const GrAppliedClip*, bool hasMixedSampledCoverage, GrClampType,
+            GrProcessorAnalysisCoverage geometryCoverage, SkPMColor4f* geometryColor, bool*
+            wideColor);
 
     using GrSimpleMeshDrawOpHelper::aaType;
     using GrSimpleMeshDrawOpHelper::setAAType;
@@ -187,7 +193,7 @@ public:
 
     bool isCompatible(const GrSimpleMeshDrawOpHelperWithStencil& that, const GrCaps&,
                       const SkRect& thisBounds, const SkRect& thatBounds,
-                      bool noneAACompatibleWithCoverage = false) const;
+                      bool ignoreAAType = false) const;
 
     void executeDrawsAndUploads(const GrOp*, GrOpFlushState*, const SkRect& chainBounds);
 

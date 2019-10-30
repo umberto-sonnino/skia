@@ -39,6 +39,7 @@ if (skia_enable_skottie) {
 
       public_configs = [ ":utils_config" ]
       configs += [ "../../:skia_private" ]
+
       sources = [
         "utils/SkottieUtils.cpp",
       ]
@@ -64,6 +65,7 @@ if (skia_enable_skottie) {
           ":skottie",
           "../..:gpu_tool_utils",
           "../..:skia",
+          "../skshaper",
         ]
       }
 
@@ -108,6 +110,10 @@ if (skia_enable_skottie) {
           "../..:flags",
           "../..:skia",
         ]
+        if (skia_use_ffmpeg) {
+          defines = [ "HAVE_VIDEO_ENCODER" ]
+          deps += [ "../..:video_decoder" ]
+        }
 
         public_deps = [
           ":skottie",
@@ -124,6 +130,7 @@ if (skia_enable_skottie) {
 
         configs += [ "../..:skia_private" ]
         sources = [
+          "gm/3dgm.cpp",
           "gm/SkottieGM.cpp",
         ]
 

@@ -5,11 +5,11 @@
  * found in the LICENSE file.
  */
 
-#include "SkFloatingPoint.h"
-#include "SkRasterPipeline.h"
-#include "SkReadBuffer.h"
-#include "SkTwoPointConicalGradient.h"
-#include "SkWriteBuffer.h"
+#include "include/private/SkFloatingPoint.h"
+#include "src/core/SkRasterPipeline.h"
+#include "src/core/SkReadBuffer.h"
+#include "src/core/SkWriteBuffer.h"
+#include "src/shaders/gradients/SkTwoPointConicalGradient.h"
 
 #include <utility>
 
@@ -136,7 +136,7 @@ sk_sp<SkFlattenable> SkTwoPointConicalGradient::CreateProc(SkReadBuffer& buffer)
     SkScalar r1 = buffer.readScalar();
     SkScalar r2 = buffer.readScalar();
 
-    if (buffer.isVersionLT(SkReadBuffer::k2PtConicalNoFlip_Version) && buffer.readBool()) {
+    if (buffer.isVersionLT(SkPicturePriv::k2PtConicalNoFlip_Version) && buffer.readBool()) {
         using std::swap;
         // legacy flipped gradient
         swap(c1, c2);
@@ -238,7 +238,7 @@ void SkTwoPointConicalGradient::appendGradientStages(SkArenaAlloc* alloc, SkRast
 
 #if SK_SUPPORT_GPU
 
-#include "gradients/GrGradientShader.h"
+#include "src/gpu/gradients/GrGradientShader.h"
 
 std::unique_ptr<GrFragmentProcessor> SkTwoPointConicalGradient::asFragmentProcessor(
         const GrFPArgs& args) const {

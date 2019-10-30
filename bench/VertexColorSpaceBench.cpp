@@ -5,24 +5,24 @@
  * found in the LICENSE file.
  */
 
-#include "Benchmark.h"
+#include "bench/Benchmark.h"
 
-#include "GrContext.h"
-#include "GrContextPriv.h"
-#include "GrGeometryProcessor.h"
-#include "GrMemoryPool.h"
-#include "GrRenderTargetContext.h"
-#include "GrRenderTargetContextPriv.h"
-#include "SkColorSpacePriv.h"
-#include "SkGr.h"
-#include "SkHalf.h"
-#include "SkString.h"
-#include "glsl/GrGLSLColorSpaceXformHelper.h"
-#include "glsl/GrGLSLFragmentShaderBuilder.h"
-#include "glsl/GrGLSLGeometryProcessor.h"
-#include "glsl/GrGLSLVarying.h"
-#include "glsl/GrGLSLVertexGeoBuilder.h"
-#include "ops/GrMeshDrawOp.h"
+#include "include/core/SkString.h"
+#include "include/gpu/GrContext.h"
+#include "include/private/SkHalf.h"
+#include "src/core/SkColorSpacePriv.h"
+#include "src/gpu/GrContextPriv.h"
+#include "src/gpu/GrGeometryProcessor.h"
+#include "src/gpu/GrMemoryPool.h"
+#include "src/gpu/GrRenderTargetContext.h"
+#include "src/gpu/GrRenderTargetContextPriv.h"
+#include "src/gpu/SkGr.h"
+#include "src/gpu/glsl/GrGLSLColorSpaceXformHelper.h"
+#include "src/gpu/glsl/GrGLSLFragmentShaderBuilder.h"
+#include "src/gpu/glsl/GrGLSLGeometryProcessor.h"
+#include "src/gpu/glsl/GrGLSLVarying.h"
+#include "src/gpu/glsl/GrGLSLVertexGeoBuilder.h"
+#include "src/gpu/ops/GrMeshDrawOp.h"
 
 namespace {
 
@@ -128,7 +128,7 @@ public:
             : INHERITED(ClassID())
             , fMode(kBaseline_Mode)
             , fColor(color) {
-        this->setBounds(SkRect::MakeWH(100.f, 100.f), HasAABloat::kNo, IsZeroArea::kNo);
+        this->setBounds(SkRect::MakeWH(100.f, 100.f), HasAABloat::kNo, IsHairline::kNo);
     }
 
     Op(const SkColor4f& color4f, Mode mode)
@@ -136,7 +136,7 @@ public:
             , fMode(mode)
             , fColor4f(color4f) {
         SkASSERT(kFloat_Mode == fMode || kHalf_Mode == mode);
-        this->setBounds(SkRect::MakeWH(100.f, 100.f), HasAABloat::kNo, IsZeroArea::kNo);
+        this->setBounds(SkRect::MakeWH(100.f, 100.f), HasAABloat::kNo, IsHairline::kNo);
     }
 
     Op(GrColor color, sk_sp<GrColorSpaceXform> colorSpaceXform)
@@ -144,15 +144,15 @@ public:
             , fMode(kShader_Mode)
             , fColor(color)
             , fColorSpaceXform(std::move(colorSpaceXform)) {
-        this->setBounds(SkRect::MakeWH(100.f, 100.f), HasAABloat::kNo, IsZeroArea::kNo);
+        this->setBounds(SkRect::MakeWH(100.f, 100.f), HasAABloat::kNo, IsHairline::kNo);
     }
 
     FixedFunctionFlags fixedFunctionFlags() const override {
         return FixedFunctionFlags::kNone;
     }
 
-    GrProcessorSet::Analysis finalize(
-            const GrCaps&, const GrAppliedClip*, GrFSAAType, GrClampType) override {
+    GrProcessorSet::Analysis finalize(const GrCaps&, const GrAppliedClip*,
+                                      bool hasMixedSampledCoverage, GrClampType) override {
         return GrProcessorSet::EmptySetAnalysis();
     }
 
@@ -269,12 +269,9 @@ public:
         SkRandom r;
         const int kDrawsPerLoop = 32;
 
-        const GrBackendFormat format =
-            context->priv().caps()->getBackendFormatFromColorType(kRGBA_8888_SkColorType);
         for (int i = 0; i < loops; ++i) {
-            sk_sp<GrRenderTargetContext> rtc(
-                    context->priv().makeDeferredRenderTargetContext(
-                            format, SkBackingFit::kApprox, 100, 100, kRGBA_8888_GrPixelConfig, p3));
+            auto rtc = context->priv().makeDeferredRenderTargetContext(
+                    SkBackingFit::kApprox, 100, 100, GrColorType::kRGBA_8888, p3);
             SkASSERT(rtc);
 
             for (int j = 0; j < kDrawsPerLoop; ++j) {

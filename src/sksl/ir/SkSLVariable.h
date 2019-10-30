@@ -8,10 +8,10 @@
 #ifndef SKSL_VARIABLE
 #define SKSL_VARIABLE
 
-#include "SkSLModifiers.h"
-#include "SkSLPosition.h"
-#include "SkSLSymbol.h"
-#include "SkSLType.h"
+#include "src/sksl/SkSLPosition.h"
+#include "src/sksl/ir/SkSLModifiers.h"
+#include "src/sksl/ir/SkSLSymbol.h"
+#include "src/sksl/ir/SkSLType.h"
 
 namespace SkSL {
 
@@ -53,8 +53,9 @@ struct Variable : public Symbol {
     }
 
     bool dead() const {
-        if (fModifiers.fFlags & (Modifiers::kIn_Flag | Modifiers::kOut_Flag |
-                                 Modifiers::kUniform_Flag)) {
+        if ((fStorage != kLocal_Storage && fReadCount) ||
+            (fModifiers.fFlags & (Modifiers::kIn_Flag | Modifiers::kOut_Flag |
+                                 Modifiers::kUniform_Flag))) {
             return false;
         }
         return !fWriteCount ||

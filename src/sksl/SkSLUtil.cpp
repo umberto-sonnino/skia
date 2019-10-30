@@ -5,7 +5,9 @@
  * found in the LICENSE file.
  */
 
-#include "SkSLUtil.h"
+#include "src/sksl/SkSLUtil.h"
+
+#include "src/sksl/SkSLStringStream.h"
 
 #ifndef __STDC_FORMAT_MACROS
 #define __STDC_FORMAT_MACROS
@@ -13,7 +15,7 @@
 
 namespace SkSL {
 
-#ifdef SKSL_STANDALONE
+#if defined(SKSL_STANDALONE) || !SK_SUPPORT_GPU
 StandaloneShaderCaps standaloneCaps;
 #endif
 
@@ -67,7 +69,7 @@ Token::Kind remove_assignment(Token::Kind op) {
         case Token::LOGICALOREQ:  return Token::LOGICALOR;
         case Token::LOGICALXOREQ: return Token::LOGICALXOR;
         case Token::LOGICALANDEQ: return Token::LOGICALAND;
-        default: return Token::INVALID;
+        default: return op;
     }
 }
 

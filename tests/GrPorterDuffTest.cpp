@@ -5,18 +5,18 @@
  * found in the LICENSE file.
  */
 
-#include "Test.h"
+#include "tests/Test.h"
 
-#include "GrBackendSurface.h"
-#include "GrContextFactory.h"
-#include "GrContextOptions.h"
-#include "GrContextPriv.h"
-#include "GrGpu.h"
-#include "GrProxyProvider.h"
-#include "GrXferProcessor.h"
-#include "effects/GrPorterDuffXferProcessor.h"
-#include "gl/GrGLCaps.h"
-#include "ops/GrMeshDrawOp.h"
+#include "include/gpu/GrBackendSurface.h"
+#include "include/gpu/GrContextOptions.h"
+#include "src/gpu/GrContextPriv.h"
+#include "src/gpu/GrGpu.h"
+#include "src/gpu/GrProxyProvider.h"
+#include "src/gpu/GrXferProcessor.h"
+#include "src/gpu/effects/GrPorterDuffXferProcessor.h"
+#include "src/gpu/gl/GrGLCaps.h"
+#include "src/gpu/ops/GrMeshDrawOp.h"
+#include "tools/gpu/GrContextFactory.h"
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -35,7 +35,6 @@ DEF_GPUTEST(GrPorterDuff, reporter, /*ctxInfo*/) {
 
     if (!caps.shaderCaps()->dualSourceBlendingSupport()) {
         SK_ABORT("Null context does not support dual source blending.");
-        return;
     }
 
     test_color_unknown_with_coverage(reporter, caps);
@@ -67,10 +66,11 @@ static GrProcessorSet::Analysis do_analysis(const GrXPFactory* xpf,
     GrPaint paint;
     paint.setXPFactory(xpf);
     GrProcessorSet procs(std::move(paint));
+    bool hasMixedSampledCoverage = false;
     SkPMColor4f overrideColor;
     GrProcessorSet::Analysis analysis = procs.finalize(
-            colorInput, coverageInput, nullptr, &GrUserStencilSettings::kUnused, GrFSAAType::kNone,
-            caps, GrClampType::kAuto, &overrideColor);
+            colorInput, coverageInput, nullptr, &GrUserStencilSettings::kUnused,
+            hasMixedSampledCoverage, caps, GrClampType::kAuto, &overrideColor);
     return analysis;
 }
 
@@ -100,7 +100,7 @@ public:
             // should always go hand in hand for Porter Duff modes.
             TEST_ASSERT(analysis.requiresDstTexture() == analysis.requiresNonOverlappingDraws());
             GetXPOutputTypes(xp.get(), &fPrimaryOutputType, &fSecondaryOutputType);
-            xp->getBlendInfo(&fBlendInfo);
+            fBlendInfo = xp->getBlendInfo();
             TEST_ASSERT(!xp->willReadDstColor() ||
                         (isLCD && (SkBlendMode::kSrcOver != xfermode ||
                                    !inputColor.isOpaque())));
@@ -959,8 +959,7 @@ static void test_lcd_coverage_fallback_case(skiatest::Reporter* reporter, const 
         return;
     }
 
-    GrXferProcessor::BlendInfo blendInfo;
-    xp_opaque->getBlendInfo(&blendInfo);
+    GrXferProcessor::BlendInfo blendInfo = xp_opaque->getBlendInfo();
     TEST_ASSERT(blendInfo.fWriteColor);
 
     // Test with non-opaque alpha
@@ -975,7 +974,7 @@ static void test_lcd_coverage_fallback_case(skiatest::Reporter* reporter, const 
         return;
     }
 
-    xp->getBlendInfo(&blendInfo);
+    blendInfo = xp->getBlendInfo();
     TEST_ASSERT(blendInfo.fWriteColor);
 }
 
@@ -986,26 +985,23 @@ DEF_GPUTEST(PorterDuffNoDualSourceBlending, reporter, options) {
     GrContext* ctx = mockFactory.get(sk_gpu_test::GrContextFactory::kMock_ContextType);
     if (!ctx) {
         SK_ABORT("Failed to create mock context without ARB_blend_func_extended.");
-        return;
     }
 
-    GrGpu* gpu = ctx->priv().getGpu();
     GrProxyProvider* proxyProvider = ctx->priv().proxyProvider();
     const GrCaps& caps = *ctx->priv().caps();
     if (caps.shaderCaps()->dualSourceBlendingSupport()) {
         SK_ABORT("Mock context failed to honor request for no ARB_blend_func_extended.");
-        return;
     }
 
     GrBackendTexture backendTex =
-        gpu->createTestingOnlyBackendTexture(nullptr, 100, 100, GrColorType::kRGBA_8888,
-                                             false, GrMipMapped::kNo);
+        ctx->createBackendTexture(100, 100, kRGBA_8888_SkColorType, SkColors::kTransparent,
+                                  GrMipMapped::kNo, GrRenderable::kNo, GrProtected::kNo);
 
     GrXferProcessor::DstProxy fakeDstProxy;
     {
         sk_sp<GrTextureProxy> proxy = proxyProvider->wrapBackendTexture(
-                backendTex, kTopLeft_GrSurfaceOrigin, kBorrow_GrWrapOwnership, GrWrapCacheable::kNo,
-                kRead_GrIOType);
+                backendTex, GrColorType::kRGBA_8888, kTopLeft_GrSurfaceOrigin,
+                kBorrow_GrWrapOwnership, GrWrapCacheable::kNo, kRead_GrIOType);
         fakeDstProxy.setProxy(std::move(proxy));
     }
 
@@ -1031,5 +1027,5 @@ DEF_GPUTEST(PorterDuffNoDualSourceBlending, reporter, options) {
             }
         }
     }
-    gpu->deleteTestingOnlyBackendTexture(backendTex);
+    ctx->deleteBackendTexture(backendTex);
 }

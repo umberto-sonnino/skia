@@ -8,11 +8,11 @@
 #ifndef SkImage_Lazy_DEFINED
 #define SkImage_Lazy_DEFINED
 
-#include "SkImage_Base.h"
-#include "SkMutex.h"
+#include "include/private/SkMutex.h"
+#include "src/image/SkImage_Base.h"
 
 #if SK_SUPPORT_GPU
-#include "GrTextureMaker.h"
+#include "src/gpu/GrTextureMaker.h"
 #endif
 
 class SharedGenerator;
@@ -54,6 +54,7 @@ public:
     bool onIsLazyGenerated() const override { return true; }
     sk_sp<SkImage> onMakeColorTypeAndColorSpace(GrRecordingContext*,
                                                 SkColorType, sk_sp<SkColorSpace>) const override;
+    sk_sp<SkImage> onReinterpretColorSpace(sk_sp<SkColorSpace>) const final;
 
     bool onIsValid(GrContext*) const override;
 

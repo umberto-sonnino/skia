@@ -5,11 +5,25 @@
  * found in the LICENSE file.
  */
 
-#include "SkBitmap.h"
-#include "SkShader.h"
-#include "SkTextUtils.h"
-#include "ToolUtils.h"
-#include "gm.h"
+#include "gm/gm.h"
+#include "include/core/SkBitmap.h"
+#include "include/core/SkBlendMode.h"
+#include "include/core/SkCanvas.h"
+#include "include/core/SkColor.h"
+#include "include/core/SkFont.h"
+#include "include/core/SkImageInfo.h"
+#include "include/core/SkMatrix.h"
+#include "include/core/SkPaint.h"
+#include "include/core/SkRect.h"
+#include "include/core/SkScalar.h"
+#include "include/core/SkShader.h"
+#include "include/core/SkSize.h"
+#include "include/core/SkString.h"
+#include "include/core/SkTileMode.h"
+#include "include/core/SkTypeface.h"
+#include "include/core/SkTypes.h"
+#include "include/utils/SkTextUtils.h"
+#include "tools/ToolUtils.h"
 
 enum SrcType {
     //! A WxH image with a rectangle in the lower right.
@@ -89,7 +103,7 @@ static void make_bitmaps(int w, int h, SkBitmap* src, SkBitmap* dst,
     {
         SkCanvas c(*src);
         p.setColor(ToolUtils::color_to_565(0xFFFFCC44));
-        r.set(0, 0, ww*3/4, hh*3/4);
+        r.setWH(ww*3/4, hh*3/4);
         c.drawOval(r, p);
     }
 
@@ -99,7 +113,7 @@ static void make_bitmaps(int w, int h, SkBitmap* src, SkBitmap* dst,
     {
         SkCanvas c(*dst);
         p.setColor(ToolUtils::color_to_565(0xFF66AAFF));
-        r.set(ww/3, hh/3, ww*19/20, hh*19/20);
+        r.setLTRB(ww/3, hh/3, ww*19/20, hh*19/20);
         c.drawRect(r, p);
     }
 

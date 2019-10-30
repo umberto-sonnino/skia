@@ -5,23 +5,23 @@
  * found in the LICENSE file.
  */
 
-#include "Resources.h"
-#include "SkDraw.h"
-#include "SkGraphics.h"
-#include "SkMutex.h"
-#include "SkRemoteGlyphCache.h"
-#include "SkRemoteGlyphCacheImpl.h"
-#include "SkStrike.h"
-#include "SkStrikeCache.h"
-#include "SkSurface.h"
-#include "SkSurfacePriv.h"
-#include "SkTextBlob.h"
-#include "SkTypeface_remote.h"
-#include "Test.h"
-#include "TestEmptyTypeface.h"
-#include "ToolUtils.h"
+#include "include/core/SkGraphics.h"
+#include "include/core/SkSurface.h"
+#include "include/core/SkTextBlob.h"
+#include "include/private/SkMutex.h"
+#include "src/core/SkDraw.h"
+#include "src/core/SkRemoteGlyphCache.h"
+#include "src/core/SkStrike.h"
+#include "src/core/SkStrikeCache.h"
+#include "src/core/SkStrikeSpec.h"
+#include "src/core/SkSurfacePriv.h"
+#include "src/core/SkTypeface_remote.h"
+#include "tests/Test.h"
+#include "tools/Resources.h"
+#include "tools/ToolUtils.h"
+#include "tools/fonts/TestEmptyTypeface.h"
 
-#include "text/GrTextContext.h"
+#include "src/gpu/text/GrTextContext.h"
 
 class DiscardableManager : public SkStrikeServer::DiscardableHandleManager,
                            public SkStrikeClient::DiscardableHandleManager {
@@ -31,14 +31,14 @@ public:
 
     // Server implementation.
     SkDiscardableHandleId createHandle() override {
-        SkAutoMutexAcquire l(&fMutex);
+        SkAutoMutexExclusive l(fMutex);
 
         // Handles starts as locked.
         fLockedHandles.add(++fNextHandleId);
         return fNextHandleId;
     }
     bool lockHandle(SkDiscardableHandleId id) override {
-        SkAutoMutexAcquire l(&fMutex);
+        SkAutoMutexExclusive l(fMutex);
 
         if (id <= fLastDeletedHandleId) return false;
         fLockedHandles.add(id);
@@ -47,55 +47,59 @@ public:
 
     // Client implementation.
     bool deleteHandle(SkDiscardableHandleId id) override {
-        SkAutoMutexAcquire l(&fMutex);
+        SkAutoMutexExclusive l(fMutex);
 
         return id <= fLastDeletedHandleId;
     }
 
     void notifyCacheMiss(SkStrikeClient::CacheMissType type) override {
-        SkAutoMutexAcquire l(&fMutex);
+        SkAutoMutexExclusive l(fMutex);
 
         fCacheMissCount[type]++;
     }
     bool isHandleDeleted(SkDiscardableHandleId id) override {
-        SkAutoMutexAcquire l(&fMutex);
+        SkAutoMutexExclusive l(fMutex);
 
         return id <= fLastDeletedHandleId;
     }
 
     void unlockAll() {
-        SkAutoMutexAcquire l(&fMutex);
+        SkAutoMutexExclusive l(fMutex);
 
         fLockedHandles.reset();
     }
     void unlockAndDeleteAll() {
-        SkAutoMutexAcquire l(&fMutex);
+        SkAutoMutexExclusive l(fMutex);
 
         fLockedHandles.reset();
         fLastDeletedHandleId = fNextHandleId;
     }
     const SkTHashSet<SkDiscardableHandleId>& lockedHandles() const {
-        SkAutoMutexAcquire l(&fMutex);
+        SkAutoMutexExclusive l(fMutex);
 
         return fLockedHandles;
     }
     SkDiscardableHandleId handleCount() {
-        SkAutoMutexAcquire l(&fMutex);
+        SkAutoMutexExclusive l(fMutex);
 
         return fNextHandleId;
     }
     int cacheMissCount(uint32_t type) {
-        SkAutoMutexAcquire l(&fMutex);
+        SkAutoMutexExclusive l(fMutex);
 
         return fCacheMissCount[type];
     }
     bool hasCacheMiss() const {
-        SkAutoMutexAcquire l(&fMutex);
+        SkAutoMutexExclusive l(fMutex);
 
         for (uint32_t i = 0; i <= SkStrikeClient::CacheMissType::kLast; ++i) {
-            if (fCacheMissCount[i] > 0) return true;
+            if (fCacheMissCount[i] > 0) { return true; }
         }
         return false;
+    }
+    void resetCacheMissCounts() {
+        SkAutoMutexExclusive l(fMutex);
+        sk_bzero(&fCacheMissCount, sizeof(fCacheMissCount));
     }
 
 private:
@@ -113,7 +117,7 @@ private:
 sk_sp<SkTextBlob> buildTextBlob(sk_sp<SkTypeface> tf, int glyphCount) {
     SkFont font;
     font.setTypeface(tf);
-    font.setHinting(kNormal_SkFontHinting);
+    font.setHinting(SkFontHinting::kNormal);
     font.setSize(1u);
     font.setEdging(SkFont::Edging::kAntiAlias);
     font.setSubpixel(true);
@@ -150,14 +154,6 @@ static void compare_blobs(const SkBitmap& expected, const SkBitmap& actual,
             }
         }
     }
-}
-
-SkTextBlobCacheDiffCanvas::Settings MakeSettings(GrContext* context) {
-    SkTextBlobCacheDiffCanvas::Settings settings;
-    settings.fContextSupportsDistanceFieldText = context->supportsDistanceFieldText();
-    settings.fMaxTextureSize = context->maxTextureSize();
-    settings.fMaxTextureBytes = GrContextOptions().fGlyphCacheTextureMaximumBytes;
-    return settings;
 }
 
 sk_sp<SkSurface> MakeSurface(int width, int height, GrContext* context) {
@@ -214,8 +210,20 @@ DEF_GPUTEST_FOR_RENDERING_CONTEXTS(SkRemoteGlyphCache_StrikeSerialization, repor
     auto serverBlob = buildTextBlob(serverTf, glyphCount);
     auto props = FindSurfaceProps(ctxInfo.grContext());
     SkTextBlobCacheDiffCanvas cache_diff_canvas(10, 10, props, &server,
-                                                MakeSettings(ctxInfo.grContext()));
+                                                ctxInfo.grContext()->supportsDistanceFieldText());
+    #ifdef SK_CAPTURE_DRAW_TEXT_BLOB
+    {
+        SkDynamicMemoryWStream wStream;
+        server.fCapture.reset(new SkTextBlobTrace::Capture);
+        cache_diff_canvas.drawTextBlob(serverBlob.get(), 0, 0, paint);
+        server.fCapture->dump(&wStream);
+        std::unique_ptr<SkStreamAsset> stream = wStream.detachAsStream();
+        std::vector<SkTextBlobTrace::Record> trace = SkTextBlobTrace::CreateBlobTrace(stream.get());
+        REPORTER_ASSERT(reporter, trace.size() == 1);
+    }
+    #else
     cache_diff_canvas.drawTextBlob(serverBlob.get(), 0, 0, paint);
+    #endif
 
     std::vector<uint8_t> serverStrikeData;
     server.writeStrikeData(&serverStrikeData);
@@ -250,8 +258,8 @@ DEF_GPUTEST_FOR_RENDERING_CONTEXTS(SkRemoteGlyphCache_ReleaseTypeFace, reporter,
         int glyphCount = 10;
         auto serverBlob = buildTextBlob(serverTf, glyphCount);
         const SkSurfaceProps props(SkSurfaceProps::kLegacyFontHost_InitType);
-        SkTextBlobCacheDiffCanvas cache_diff_canvas(10, 10, props, &server,
-                                                    MakeSettings(ctxInfo.grContext()));
+        SkTextBlobCacheDiffCanvas cache_diff_canvas(
+                10, 10, props, &server, ctxInfo.grContext()->supportsDistanceFieldText());
         cache_diff_canvas.drawTextBlob(serverBlob.get(), 0, 0, paint);
         REPORTER_ASSERT(reporter, !serverTf->unique());
 
@@ -318,6 +326,13 @@ DEF_TEST(SkRemoteGlyphCache_StrikeDeletionServer, reporter) {
     // handles.
     std::vector<uint8_t> fontData;
     server.writeStrikeData(&fontData);
+
+    // Another analysis pass, to ensure that deleting handles after a complete cache hit still
+    // works. This is a regression test for crbug.com/999682.
+    cache_diff_canvas.drawTextBlob(serverBlob.get(), 0, 0, paint);
+    server.writeStrikeData(&fontData);
+    REPORTER_ASSERT(reporter, discardableManager->handleCount() == 1u);
+
     discardableManager->unlockAndDeleteAll();
     cache_diff_canvas.drawTextBlob(serverBlob.get(), 0, 0, paint);
     REPORTER_ASSERT(reporter, discardableManager->handleCount() == 2u);
@@ -408,9 +423,9 @@ DEF_TEST(SkRemoteGlyphCache_PurgesServerEntries, reporter) {
         const SkSurfaceProps props(SkSurfaceProps::kLegacyFontHost_InitType);
         SkTextBlobCacheDiffCanvas cache_diff_canvas(10, 10, props, &server);
         SkPaint paint;
-        REPORTER_ASSERT(reporter, server.remoteGlyphStateMapSizeForTesting() == 0u);
+        REPORTER_ASSERT(reporter, server.remoteStrikeMapSizeForTesting() == 0u);
         cache_diff_canvas.drawTextBlob(serverBlob.get(), 0, 0, paint);
-        REPORTER_ASSERT(reporter, server.remoteGlyphStateMapSizeForTesting() == 1u);
+        REPORTER_ASSERT(reporter, server.remoteStrikeMapSizeForTesting() == 1u);
     }
 
     // Serialize to release the lock from the strike server and delete all current
@@ -429,9 +444,9 @@ DEF_TEST(SkRemoteGlyphCache_PurgesServerEntries, reporter) {
         const SkSurfaceProps props(SkSurfaceProps::kLegacyFontHost_InitType);
         SkTextBlobCacheDiffCanvas cache_diff_canvas(10, 10, props, &server);
         SkPaint paint;
-        REPORTER_ASSERT(reporter, server.remoteGlyphStateMapSizeForTesting() == 1u);
+        REPORTER_ASSERT(reporter, server.remoteStrikeMapSizeForTesting() == 1u);
         cache_diff_canvas.drawTextBlob(serverBlob.get(), 0, 0, paint);
-        REPORTER_ASSERT(reporter, server.remoteGlyphStateMapSizeForTesting() == 1u);
+        REPORTER_ASSERT(reporter, server.remoteStrikeMapSizeForTesting() == 1u);
     }
 
     // Must unlock everything on termination, otherwise valgrind complains about memory leaks.
@@ -445,7 +460,8 @@ DEF_GPUTEST_FOR_RENDERING_CONTEXTS(SkRemoteGlyphCache_DrawTextAsPath, reporter, 
     SkPaint paint;
     paint.setStyle(SkPaint::kStroke_Style);
     paint.setStrokeWidth(0);
-    REPORTER_ASSERT(reporter, SkDraw::ShouldDrawTextAsPaths(SkFont(), paint, SkMatrix::I()));
+    REPORTER_ASSERT(reporter,
+            SkStrikeSpec::ShouldDrawAsPath(paint, SkFont(), SkMatrix::I()));
 
     // Server.
     auto serverTf = SkTypeface::MakeFromName("monospace", SkFontStyle());
@@ -454,8 +470,8 @@ DEF_GPUTEST_FOR_RENDERING_CONTEXTS(SkRemoteGlyphCache_DrawTextAsPath, reporter, 
     int glyphCount = 10;
     auto serverBlob = buildTextBlob(serverTf, glyphCount);
     auto props = FindSurfaceProps(ctxInfo.grContext());
-    SkTextBlobCacheDiffCanvas cache_diff_canvas(10, 10, props, &server,
-                                                MakeSettings(ctxInfo.grContext()));
+    SkTextBlobCacheDiffCanvas cache_diff_canvas(
+            10, 10, props, &server, ctxInfo.grContext()->supportsDistanceFieldText());
     cache_diff_canvas.drawTextBlob(serverBlob.get(), 0, 0, paint);
 
     std::vector<uint8_t> serverStrikeData;
@@ -482,10 +498,11 @@ sk_sp<SkTextBlob> make_blob_causing_fallback(
     SkFont font;
     font.setSubpixel(true);
     font.setSize(96);
-    font.setHinting(kNormal_SkFontHinting);
+    font.setHinting(SkFontHinting::kNormal);
     font.setTypeface(targetTf);
 
-    REPORTER_ASSERT(reporter, !SkDraw::ShouldDrawTextAsPaths(font, SkPaint(), SkMatrix::I()));
+    REPORTER_ASSERT(reporter,
+            !SkStrikeSpec::ShouldDrawAsPath(SkPaint(), font, SkMatrix::I()));
 
     char s[] = "Skia";
     int runSize = strlen(s);
@@ -496,7 +513,8 @@ sk_sp<SkTextBlob> make_blob_causing_fallback(
     SkASSERT(runBuffer.utf8text == nullptr);
     SkASSERT(runBuffer.clusters == nullptr);
 
-    glyphTf->charsToGlyphs(s, SkTypeface::kUTF8_Encoding, runBuffer.glyphs, runSize);
+    SkFont(sk_ref_sp(glyphTf)).textToGlyphs(s, strlen(s), SkTextEncoding::kUTF8,
+                                            runBuffer.glyphs, runSize);
 
     SkRect glyphBounds;
     font.getWidths(runBuffer.glyphs, 1, nullptr, &glyphBounds);
@@ -528,8 +546,8 @@ DEF_GPUTEST_FOR_RENDERING_CONTEXTS(SkRemoteGlyphCache_DrawTextAsMaskWithPathFall
     auto serverBlob = make_blob_causing_fallback(serverTf, serverTf.get(), reporter);
 
     auto props = FindSurfaceProps(ctxInfo.grContext());
-    SkTextBlobCacheDiffCanvas cache_diff_canvas(10, 10, props, &server,
-                                                MakeSettings(ctxInfo.grContext()));
+    SkTextBlobCacheDiffCanvas cache_diff_canvas(
+            10, 10, props, &server, ctxInfo.grContext()->supportsDistanceFieldText());
     cache_diff_canvas.drawTextBlob(serverBlob.get(), 0, 0, paint);
 
     std::vector<uint8_t> serverStrikeData;
@@ -574,7 +592,7 @@ DEF_GPUTEST_FOR_RENDERING_CONTEXTS(SkRemoteGlyphCache_DrawTextAsSDFTWithAllARGBF
         SkFont font;
         font.setSubpixel(true);
         font.setSize(96);
-        font.setHinting(kNormal_SkFontHinting);
+        font.setHinting(SkFontHinting::kNormal);
         font.setTypeface(typeface);
 
         REPORTER_ASSERT(reporter, !SkDraw::ShouldDrawTextAsPaths(font, SkPaint(), SkMatrix::I()));
@@ -600,8 +618,8 @@ DEF_GPUTEST_FOR_RENDERING_CONTEXTS(SkRemoteGlyphCache_DrawTextAsSDFTWithAllARGBF
     auto serverBlob = makeBlob(serverTf);
 
     auto props = FindSurfaceProps(ctxInfo.grContext());
-    SkTextBlobCacheDiffCanvas cache_diff_canvas(800, 800, props, &server,
-                                                MakeSettings(ctxInfo.grContext()));
+    SkTextBlobCacheDiffCanvas cache_diff_canvas(
+            800, 800, props, &server, ctxInfo.grContext()->supportsDistanceFieldText());
     cache_diff_canvas.drawTextBlob(serverBlob.get(), 0, 400, paint);
 
     std::vector<uint8_t> serverStrikeData;
@@ -642,8 +660,8 @@ DEF_GPUTEST_FOR_RENDERING_CONTEXTS(SkRemoteGlyphCache_DrawTextXY, reporter, ctxI
     int glyphCount = 10;
     auto serverBlob = buildTextBlob(serverTf, glyphCount);
     auto props = FindSurfaceProps(ctxInfo.grContext());
-    SkTextBlobCacheDiffCanvas cache_diff_canvas(10, 10, props, &server,
-                                                MakeSettings(ctxInfo.grContext()));
+    SkTextBlobCacheDiffCanvas cache_diff_canvas(
+            10, 10, props, &server, ctxInfo.grContext()->supportsDistanceFieldText());
     cache_diff_canvas.drawTextBlob(serverBlob.get(), 0.5, 0, paint);
 
     std::vector<uint8_t> serverStrikeData;
@@ -672,10 +690,8 @@ DEF_GPUTEST_FOR_RENDERING_CONTEXTS(SkRemoteGlyphCache_DrawTextAsDFT, reporter, c
     SkPaint paint;
     SkFont font;
 
-    // A perspective transform forces fallback to dft.
-    SkMatrix matrix = SkMatrix::I();
-    matrix[SkMatrix::kMPersp0] = 0.5f;
-    REPORTER_ASSERT(reporter, matrix.hasPerspective());
+    // A scale transform forces fallback to dft.
+    SkMatrix matrix = SkMatrix::MakeScale(16);
     SkSurfaceProps surfaceProps(0, kUnknown_SkPixelGeometry);
     GrTextContext::Options options;
     GrTextContext::SanitizeOptions(&options);
@@ -689,8 +705,8 @@ DEF_GPUTEST_FOR_RENDERING_CONTEXTS(SkRemoteGlyphCache_DrawTextAsDFT, reporter, c
     int glyphCount = 10;
     auto serverBlob = buildTextBlob(serverTf, glyphCount);
     const SkSurfaceProps props(SkSurfaceProps::kLegacyFontHost_InitType);
-    SkTextBlobCacheDiffCanvas cache_diff_canvas(10, 10, props, &server,
-                                                MakeSettings(ctxInfo.grContext()));
+    SkTextBlobCacheDiffCanvas cache_diff_canvas(
+            10, 10, props, &server, ctxInfo.grContext()->supportsDistanceFieldText());
     cache_diff_canvas.concat(matrix);
     cache_diff_canvas.drawTextBlob(serverBlob.get(), 0, 0, paint);
 
@@ -743,6 +759,68 @@ DEF_GPUTEST_FOR_RENDERING_CONTEXTS(SkRemoteGlyphCache_CacheMissReporting, report
     discardableManager->unlockAndDeleteAll();
 }
 
+sk_sp<SkTextBlob> MakeEmojiBlob(sk_sp<SkTypeface> serverTf, SkScalar textSize,
+                                sk_sp<SkTypeface> clientTf = nullptr) {
+    SkFont font;
+    font.setTypeface(serverTf);
+    font.setSize(textSize);
+
+    const char* text = ToolUtils::emoji_sample_text();
+    SkFont serverFont = font;
+    auto blob = SkTextBlob::MakeFromText(text, strlen(text), font);
+    if (clientTf == nullptr) return blob;
+
+    SkSerialProcs s_procs;
+    s_procs.fTypefaceProc = [](SkTypeface*, void* ctx) -> sk_sp<SkData> {
+        return SkData::MakeUninitialized(1u);
+    };
+    auto serialized = blob->serialize(s_procs);
+
+    SkDeserialProcs d_procs;
+    d_procs.fTypefaceCtx = &clientTf;
+    d_procs.fTypefaceProc = [](const void* data, size_t length, void* ctx) -> sk_sp<SkTypeface> {
+        return *(static_cast<sk_sp<SkTypeface>*>(ctx));
+    };
+    return SkTextBlob::Deserialize(serialized->data(), serialized->size(), d_procs);
+}
+
+DEF_GPUTEST_FOR_RENDERING_CONTEXTS(SkRemoteGlyphCache_TypefaceWithNoPaths, reporter, ctxInfo) {
+    sk_sp<DiscardableManager> discardableManager = sk_make_sp<DiscardableManager>();
+    SkStrikeServer server(discardableManager.get());
+    SkStrikeClient client(discardableManager, false);
+
+    auto serverTf = ToolUtils::emoji_typeface();
+    auto serverTfData = server.serializeTypeface(serverTf.get());
+    auto clientTf = client.deserializeTypeface(serverTfData->data(), serverTfData->size());
+
+    for (SkScalar textSize : { 70, 180, 270, 340}) {
+        auto serverBlob = MakeEmojiBlob(serverTf, textSize);
+        auto props = FindSurfaceProps(ctxInfo.grContext());
+        SkTextBlobCacheDiffCanvas cache_diff_canvas(
+                500, 500, props, &server, ctxInfo.grContext()->supportsDistanceFieldText());
+        SkPaint paint;
+        cache_diff_canvas.drawTextBlob(serverBlob.get(), 100, 100, paint);
+
+        std::vector<uint8_t> serverStrikeData;
+        server.writeStrikeData(&serverStrikeData);
+        if (!serverStrikeData.empty()) {
+            REPORTER_ASSERT(reporter,
+                            client.readStrikeData(serverStrikeData.data(),
+                                                  serverStrikeData.size()));
+        }
+        auto clientBlob = MakeEmojiBlob(serverTf, textSize, clientTf);
+        REPORTER_ASSERT(reporter, clientBlob);
+
+        RasterBlob(clientBlob, 500, 500, paint, ctxInfo.grContext());
+        REPORTER_ASSERT(reporter, !discardableManager->hasCacheMiss());
+        SkStrikeCache::ValidateGlyphCacheDataSize();
+        discardableManager->resetCacheMissCounts();
+    }
+
+    // Must unlock everything on termination, otherwise valgrind complains about memory leaks.
+    discardableManager->unlockAndDeleteAll();
+}
+
 DEF_TEST(SkRemoteGlyphCache_SearchOfDesperation, reporter) {
     // Build proxy typeface on the client for initializing the cache.
     sk_sp<DiscardableManager> discardableManager = sk_make_sp<DiscardableManager>();
@@ -756,6 +834,7 @@ DEF_TEST(SkRemoteGlyphCache_SearchOfDesperation, reporter) {
 
     SkFont font;
     font.setTypeface(clientTf);
+    font.setSubpixel(true);
     SkPaint paint;
     paint.setAntiAlias(true);
     paint.setColor(SK_ColorRED);
@@ -777,12 +856,8 @@ DEF_TEST(SkRemoteGlyphCache_SearchOfDesperation, reporter) {
         auto desc = SkScalerContext::AutoDescriptorGivenRecAndEffects(rec, effects, &ad);
 
         auto fallbackCache = strikeCache.findOrCreateStrikeExclusive(*desc, effects, *clientTf);
-        auto glyph = fallbackCache->getRawGlyphByID(lostGlyphID);
-        glyph->fMaskFormat = SkMask::kA8_Format;
-        glyph->fHeight = 1;
-        glyph->fWidth = 2;
-        fallbackCache->initializeImage(glyphImage, glyph->computeImageSize(), glyph);
-        glyph->fImage = (void *)glyphImage;
+        SkGlyphPrototype proto = {lostGlyphID, 0.f, 0.f, 2, 1, 0, 0, SkMask::kA8_Format, false};
+        fallbackCache->glyphFromPrototype(proto, (void*)glyphImage);
     }
 
     // Make sure we can find the fall back cache.
@@ -818,26 +893,28 @@ DEF_TEST(SkRemoteGlyphCache_SearchOfDesperation, reporter) {
 
     // Look for the lost glyph.
     {
-        const auto& lostGlyph = testCache->getGlyphIDMetrics(
-                lostGlyphID.code(), lostGlyphID.getSubXFixed(), lostGlyphID.getSubYFixed());
-        testCache->findImage(lostGlyph);
+        SkPoint pt{SkFixedToScalar(lostGlyphID.getSubXFixed()),
+                   SkFixedToScalar(lostGlyphID.getSubYFixed())};
+        SkGlyph* lostGlyph = testCache->glyph(lostGlyphID.glyphID(), pt);
+        testCache->prepareImage(lostGlyph);
 
-        REPORTER_ASSERT(reporter, lostGlyph.fHeight == 1);
-        REPORTER_ASSERT(reporter, lostGlyph.fWidth == 2);
-        REPORTER_ASSERT(reporter, lostGlyph.fMaskFormat == SkMask::kA8_Format);
-        REPORTER_ASSERT(reporter, memcmp(lostGlyph.fImage, glyphImage, sizeof(glyphImage)) == 0);
+        REPORTER_ASSERT(reporter, lostGlyph->height() == 1);
+        REPORTER_ASSERT(reporter, lostGlyph->width() == 2);
+        REPORTER_ASSERT(reporter, lostGlyph->maskFormat() == SkMask::kA8_Format);
+        REPORTER_ASSERT(reporter, memcmp(lostGlyph->image(), glyphImage, sizeof(glyphImage)) == 0);
     }
 
     // Look for the lost glyph with a different sub-pix position.
     {
-        const auto& lostGlyph =
-                testCache->getGlyphIDMetrics(lostGlyphID.code(), SK_FixedQuarter, SK_FixedQuarter);
-        testCache->findImage(lostGlyph);
+        SkPoint pt{SkFixedToScalar(SK_FixedQuarter),
+                   SkFixedToScalar(SK_FixedQuarter)};
+        SkGlyph* lostGlyph = testCache->glyph(lostGlyphID.glyphID(), pt);
+        testCache->prepareImage(lostGlyph);
 
-        REPORTER_ASSERT(reporter, lostGlyph.fHeight == 1);
-        REPORTER_ASSERT(reporter, lostGlyph.fWidth == 2);
-        REPORTER_ASSERT(reporter, lostGlyph.fMaskFormat == SkMask::kA8_Format);
-        REPORTER_ASSERT(reporter, memcmp(lostGlyph.fImage, glyphImage, sizeof(glyphImage)) == 0);
+        REPORTER_ASSERT(reporter, lostGlyph->height() == 1);
+        REPORTER_ASSERT(reporter, lostGlyph->width() == 2);
+        REPORTER_ASSERT(reporter, lostGlyph->maskFormat() == SkMask::kA8_Format);
+        REPORTER_ASSERT(reporter, memcmp(lostGlyph->image(), glyphImage, sizeof(glyphImage)) == 0);
     }
 
     for (uint32_t i = 0; i <= SkStrikeClient::CacheMissType::kLast; ++i) {
@@ -870,10 +947,12 @@ DEF_TEST(SkRemoteGlyphCache_ReWriteGlyph, reporter) {
     SkPaint paint;
     paint.setColor(SK_ColorRED);
 
-    auto lostGlyphID = SkPackedGlyphID(1, SK_FixedHalf, SK_FixedHalf);
+    SkPoint glyphPos = {0.5f, 0.5f};
+    SkIPoint glyphIPos = {SkScalarToFixed(glyphPos.x()), SkScalarToFixed(glyphPos.y())};
+    auto lostGlyphID = SkPackedGlyphID(1, glyphIPos.x(), glyphIPos.y());
     const uint8_t glyphImage[] = {0xFF, 0xFF};
-    uint32_t realMask;
-    uint32_t fakeMask;
+    SkMask::Format realMask;
+    SkMask::Format fakeMask;
 
     SkStrikeCache strikeCache;
 
@@ -891,8 +970,7 @@ DEF_TEST(SkRemoteGlyphCache_ReWriteGlyph, reporter) {
         auto context = serverTf->createScalerContext(effects, desc, false);
         SkGlyph glyph{lostGlyphID};
         context->getMetrics(&glyph);
-        realMask = glyph.fMaskFormat;
-        REPORTER_ASSERT(reporter, realMask != MASK_FORMAT_UNKNOWN);
+        realMask = glyph.maskFormat();
     }
 
     // Build a fallback cache.
@@ -908,12 +986,9 @@ DEF_TEST(SkRemoteGlyphCache_ReWriteGlyph, reporter) {
         auto desc = SkScalerContext::AutoDescriptorGivenRecAndEffects(rec, effects, &ad);
 
         auto fallbackCache = strikeCache.findOrCreateStrikeExclusive(*desc, effects, *clientTf);
-        auto glyph = fallbackCache->getRawGlyphByID(lostGlyphID);
         fakeMask = (realMask == SkMask::kA8_Format) ? SkMask::kBW_Format : SkMask::kA8_Format;
-        glyph->fMaskFormat = fakeMask;
-        glyph->fHeight = 1;
-        glyph->fWidth = 2;
-        fallbackCache->initializeImage(glyphImage, glyph->computeImageSize(), glyph);
+        SkGlyphPrototype proto = {lostGlyphID, 0.f, 0.f, 2, 1, 0, 0, fakeMask, false};
+        fallbackCache->glyphFromPrototype(proto, (void *)glyphImage);
     }
 
     // Send over the real glyph and make sure the client cache stays intact.
@@ -925,10 +1000,17 @@ DEF_TEST(SkRemoteGlyphCache_ReWriteGlyph, reporter) {
         auto* cacheState = server.getOrCreateCache(
                 paint, font, SkSurfacePropsCopyOrDefault(nullptr),
                 SkMatrix::I(), flags, &effects);
-        cacheState->addGlyph(lostGlyphID, false);
-
+        SkGlyphID glyphID = lostGlyphID.glyphID();
+        SkZip<const SkGlyphID, const SkPoint> source{1, &glyphID, &glyphPos};
+        SkSourceGlyphBuffer rejects;
+        SkDrawableGlyphBuffer drawables;
+        drawables.ensureSize(source.size());
+        rejects.setSource(source);
+        drawables.startSource(rejects.source(), {0, 0});
+        SkStrikeServer::AddGlyphForTesting(cacheState, &drawables, &rejects);
         std::vector<uint8_t> serverStrikeData;
         server.writeStrikeData(&serverStrikeData);
+        REPORTER_ASSERT(reporter, !serverStrikeData.empty());
         REPORTER_ASSERT(reporter,
                         client.readStrikeData(
                                 serverStrikeData.data(),
@@ -948,10 +1030,12 @@ DEF_TEST(SkRemoteGlyphCache_ReWriteGlyph, reporter) {
 
         auto fallbackCache = strikeCache.findStrikeExclusive(*desc);
         REPORTER_ASSERT(reporter, fallbackCache.get() != nullptr);
-        auto glyph = fallbackCache->getRawGlyphByID(lostGlyphID);
-        REPORTER_ASSERT(reporter, glyph->fMaskFormat == fakeMask);
-        REPORTER_ASSERT(reporter,
-                        memcmp(glyph->fImage, glyphImage, glyph->computeImageSize()) == 0);
+        auto glyph = fallbackCache->glyphOrNull(lostGlyphID);
+        REPORTER_ASSERT(reporter, glyph && glyph->maskFormat() == fakeMask);
+        if (glyph) {
+            REPORTER_ASSERT(reporter,
+                            memcmp(glyph->image(), glyphImage, glyph->imageSize()) == 0);
+        }
     }
 
     strikeCache.validateGlyphCacheDataSize();

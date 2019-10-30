@@ -5,14 +5,31 @@
  * found in the LICENSE file.
  */
 
-#include "gm.h"
+#include "gm/gm.h"
+#include "include/core/SkBlendMode.h"
+#include "include/core/SkCanvas.h"
+#include "include/core/SkColor.h"
+#include "include/core/SkFont.h"
+#include "include/core/SkMatrix.h"
+#include "include/core/SkPaint.h"
+#include "include/core/SkPoint.h"
+#include "include/core/SkRect.h"
+#include "include/core/SkScalar.h"
+#include "include/core/SkShader.h"
+#include "include/core/SkSize.h"
+#include "include/core/SkString.h"
+#include "include/core/SkTileMode.h"
+#include "include/core/SkTypeface.h"
+#include "include/core/SkTypes.h"
+#include "include/effects/SkGradientShader.h"
+#include "include/gpu/GrContext.h"
+#include "include/private/GrTypesPriv.h"
+#include "src/gpu/GrClip.h"
+#include "src/gpu/GrPaint.h"
+#include "src/gpu/GrRenderTargetContext.h"
+#include "src/gpu/SkGr.h"
 
-#include "GrClip.h"
-#include "GrContext.h"
-#include "GrRenderTargetContext.h"
-#include "GrSurfaceContextPriv.h"
-#include "SkGr.h"
-#include "SkGradientShader.h"
+#include <utility>
 
 static constexpr SkScalar kTileWidth = 40;
 static constexpr SkScalar kTileHeight = 30;
@@ -65,7 +82,7 @@ static void draw_gradient_tiles(SkCanvas* canvas, bool alignGradients) {
                 // Use non-public API to leverage general GrPaint capabilities
                 SkMatrix view = canvas->getTotalMatrix();
                 GrPaint grPaint;
-                SkPaintToGrPaint(context, rtc->colorSpaceInfo(), paint, view, &grPaint);
+                SkPaintToGrPaint(context, rtc->colorInfo(), paint, view, &grPaint);
                 rtc->fillRectWithEdgeAA(GrNoClip(), std::move(grPaint), GrAA::kYes,
                                         static_cast<GrQuadAAFlags>(aa), view, tile);
             } else {
@@ -158,7 +175,7 @@ namespace skiagm {
 
 class DrawQuadSetGM : public GM {
 private:
-    SkString onShortName() final { return SkString("draw_quad_set"); }
+    SkString onShortName() override { return SkString("draw_quad_set"); }
     SkISize onISize() override { return SkISize::Make(800, 800); }
 
     void onDraw(SkCanvas* canvas) override {

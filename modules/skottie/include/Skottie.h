@@ -8,11 +8,11 @@
 #ifndef Skottie_DEFINED
 #define Skottie_DEFINED
 
-#include "SkFontMgr.h"
-#include "SkRefCnt.h"
-#include "SkSize.h"
-#include "SkString.h"
-#include "SkTypes.h"
+#include "include/core/SkFontMgr.h"
+#include "include/core/SkRefCnt.h"
+#include "include/core/SkSize.h"
+#include "include/core/SkString.h"
+#include "include/core/SkTypes.h"
 
 #include <memory>
 
@@ -24,7 +24,12 @@ class SkStream;
 
 namespace skjson { class ObjectValue; }
 
-namespace sksg { class Scene;  }
+namespace sksg {
+
+class InvalidationController;
+class Scene;
+
+} // namespace sksg
 
 namespace skottie {
 
@@ -72,7 +77,8 @@ public:
      * ImageAsset proxy.
      */
     virtual sk_sp<ImageAsset> loadImageAsset(const char resource_path[],
-                                             const char resource_name[]) const;
+                                             const char resource_name[],
+                                             const char resource_id[]) const;
 
     /**
      * Load an external font and return as SkData.
@@ -209,22 +215,47 @@ public:
     void render(SkCanvas* canvas, const SkRect* dst, RenderFlags) const;
 
     /**
+     * [Deprecated: use one of the other versions.]
+     *
      * Updates the animation state for |t|.
      *
      * @param t   normalized [0..1] frame selector (0 -> first frame, 1 -> final frame)
+     * @param ic  optional invalidation controller (dirty region tracking)
      *
      */
-    void seek(SkScalar t);
+    void seek(SkScalar t, sksg::InvalidationController* ic = nullptr) {
+        this->seekFrameTime(t * this->duration(), ic);
+    }
+
+    /**
+     * Update the animation state to match |t|, specified as a frame index
+     * i.e. relative to duration() * fps().
+     *
+     * Fractional values are allowed and meaningful - e.g.
+     *
+     *   0.0 -> first frame
+     *   1.0 -> second frame
+     *   0.5 -> halfway between first and second frame
+     */
+    void seekFrame(double t, sksg::InvalidationController* ic = nullptr);
+
+    /** Update the animation state to match t, specifed in frame time
+     *  i.e. relative to duration().
+     */
+    void seekFrameTime(double t, sksg::InvalidationController* = nullptr);
 
     /**
      * Returns the animation duration in seconds.
      */
-    SkScalar duration() const { return fDuration; }
+    double duration() const { return fDuration; }
 
-    const SkString& version() const { return fVersion;   }
-    const SkSize&      size() const { return fSize;      }
+    /**
+     * Returns the animation frame rate (frames / second).
+     */
+    double fps() const { return fFPS; }
 
-    void setShowInval(bool show);
+    const SkString& version() const { return fVersion; }
+    const SkSize&      size() const { return fSize;    }
 
 private:
     enum Flags : uint32_t {
@@ -232,14 +263,15 @@ private:
     };
 
     Animation(std::unique_ptr<sksg::Scene>, SkString ver, const SkSize& size,
-              SkScalar inPoint, SkScalar outPoint, SkScalar duration, uint32_t flags = 0);
+              double inPoint, double outPoint, double duration, double fps, uint32_t flags);
 
     std::unique_ptr<sksg::Scene> fScene;
     const SkString               fVersion;
     const SkSize                 fSize;
-    const SkScalar               fInPoint,
+    const double                 fInPoint,
                                  fOutPoint,
-                                 fDuration;
+                                 fDuration,
+                                 fFPS;
     const uint32_t               fFlags;
 
     typedef SkNVRefCnt<Animation> INHERITED;

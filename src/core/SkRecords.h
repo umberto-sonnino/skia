@@ -8,22 +8,22 @@
 #ifndef SkRecords_DEFINED
 #define SkRecords_DEFINED
 
-#include "SkData.h"
-#include "SkCanvas.h"
-#include "SkDrawable.h"
-#include "SkDrawShadowInfo.h"
-#include "SkImage.h"
-#include "SkImageFilter.h"
-#include "SkMatrix.h"
-#include "SkPath.h"
-#include "SkPicture.h"
-#include "SkRect.h"
-#include "SkRegion.h"
-#include "SkRRect.h"
-#include "SkRSXform.h"
-#include "SkString.h"
-#include "SkTextBlob.h"
-#include "SkVertices.h"
+#include "include/core/SkCanvas.h"
+#include "include/core/SkData.h"
+#include "include/core/SkDrawable.h"
+#include "include/core/SkImage.h"
+#include "include/core/SkImageFilter.h"
+#include "include/core/SkMatrix.h"
+#include "include/core/SkPath.h"
+#include "include/core/SkPicture.h"
+#include "include/core/SkRRect.h"
+#include "include/core/SkRSXform.h"
+#include "include/core/SkRect.h"
+#include "include/core/SkRegion.h"
+#include "include/core/SkString.h"
+#include "include/core/SkTextBlob.h"
+#include "include/core/SkVertices.h"
+#include "src/core/SkDrawShadowInfo.h"
 
 namespace SkRecords {
 
@@ -59,6 +59,7 @@ namespace SkRecords {
     M(DrawImageNine)                                                \
     M(DrawDRRect)                                                   \
     M(DrawOval)                                                     \
+    M(DrawBehind)                                                   \
     M(DrawPaint)                                                    \
     M(DrawPath)                                                     \
     M(DrawPatch)                                                    \
@@ -87,7 +88,7 @@ enum Type { SK_RECORD_TYPES(ENUM) };
 
 // An Optional doesn't own the pointer's memory, but may need to destroy non-POD data.
 template <typename T>
-class Optional : SkNoncopyable {
+class Optional {
 public:
     Optional() : fPtr(nullptr) {}
     Optional(T* ptr) : fPtr(ptr) {}
@@ -99,11 +100,13 @@ public:
     ACT_AS_PTR(fPtr)
 private:
     T* fPtr;
+    Optional(const Optional&) = delete;
+    Optional& operator=(const Optional&) = delete;
 };
 
 // Like Optional, but ptr must not be NULL.
 template <typename T>
-class Adopted : SkNoncopyable {
+class Adopted {
 public:
     Adopted(T* ptr) : fPtr(ptr) { SkASSERT(fPtr); }
     Adopted(Adopted* source) {
@@ -116,6 +119,8 @@ public:
     ACT_AS_PTR(fPtr)
 private:
     T* fPtr;
+    Adopted(const Adopted&) = delete;
+    Adopted& operator=(const Adopted&) = delete;
 };
 
 // PODArray doesn't own the pointer's memory, and we assume the data is POD.
@@ -265,6 +270,8 @@ RECORD(DrawOval, kDraw_Tag|kHasPaint_Tag,
         SkRect oval);
 RECORD(DrawPaint, kDraw_Tag|kHasPaint_Tag,
         SkPaint paint);
+RECORD(DrawBehind, kDraw_Tag|kHasPaint_Tag,
+       SkPaint paint);
 RECORD(DrawPath, kDraw_Tag|kHasPaint_Tag,
         SkPaint paint;
         PreCachedPath path);
@@ -323,7 +330,7 @@ RECORD(DrawEdgeAAQuad, kDraw_Tag,
        SkRect rect;
        PODArray<SkPoint> clip;
        SkCanvas::QuadAAFlags aa;
-       SkColor color;
+       SkColor4f color;
        SkBlendMode mode);
 RECORD(DrawEdgeAAImageSet, kDraw_Tag|kHasImage_Tag|kHasPaint_Tag,
        Optional<SkPaint> paint;

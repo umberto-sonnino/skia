@@ -5,6 +5,62 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+ - Experimental `CanvasKit.Malloc`, which can be used to create a
+   TypedArray backed by the C++ WASM memory. This can save a copy in some cases
+   (e.g. SkColorFilter.MakeMatrix). This is an advanced feature, so use it with care.
+ - `SkCanvas.clipRRect`, `SkCanvas.drawColor`
+ - Blur, ColorFilter, Compose SkImageFilters. Can be used with `SkPaint.setImageFilter`.
+ - `SkCanvas.saveLayer` now takes 3 or 4 params to include up to bounds, paint, SkImageFilter, flags.
+
+### Deprecated
+ - `CanvasKit.MakeBlurMaskFilter` will be renamed/moved soon to `CanvasKit.SkMaskFilter.MakeBlur`.
+
+### Changed
+ - Use newer version of Freetype2 (Tracking Skia's DEPS now).
+ - Use newer versions of libpng and zlib (Tracking Skia's DEPS now).
+
+## [0.8.0] - 2019-10-21
+
+### Added
+ - `CanvasKit.MakeAnimatedImageFromEncoded`, `SkCanvas.drawAnimatedImage`.
+ - `CanvasKit.SkFontMgr.FromData` which takes several ArrayBuffers of font data, parses
+   them, reading the metadata (e.g. family names) and stores them into a SkFontMgr.
+ - SkParagraph as an optional set of APIs for dealing with text layout.
+
+### Changed
+ - The `no_font` compile option should strip out more dead code related to fonts.
+ - and `no_embedded_font` option now allows creating a `SkFontMgr.FromData` instead of
+   always having an empty one.
+ - Updated to emscripten 1.38.47
+ - Switch to WebGL 2.0, but fall back to 1.0 when unavailable - bug.skia.org/9052
+
+### Fixed
+ - Null terminator bug in draw text - skbug.com/9314
+
+## [0.7.0] - 2019-09-18
+
+### Added
+ - `SkCanvas.drawCircle()`, `SkCanvas.getSaveCount()`
+ - `SkPath.offset()`, `SkPath.drawOval`
+ - `SkRRect` support (`SkCanvas.drawRRect`, `SkCanvas.drawDRRect`, `CanvasKit.RRectXY`).
+   Advanced users can specify the 8 individual radii, if needed.
+ - `CanvasKit.computeTonalColors()`, which  returns TonalColors, which has an
+   ambient SkColor and a spot SkColor.
+ - `CanvasKit.SkColorFilter` and a variety of factories. `SkPaint.setColorFilter` is the only
+   consumer of these at the moment.
+ - `CanvasKit.SkColorMatrix` with functions `.identity()`, `.scaled()`, `.concat()` and
+   others. Primarily for use with `CanvasKit.SkColorFilter.MakeMatrix`.
+
+### Changed
+ - `MakeSkVertices` uses a builder to save a copy.
+
+### Breaking
+ - When `SkPath.arcTo` is given seven arguments, it no longer turns the first four into
+   a `SkRect` automatically, and instead uses them as
+   `arcTo(rx, ry, xAxisRotate, useSmallArc, isCCW, x, y)` (see SkPath.h for more).
+
+## [0.6.0] - 2019-05-06
 
 ### Added
  - `SkSurface.grContext` now exposed. `GrContext` has new methods for monitoring/setting
@@ -17,6 +73,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - Basic `SkPicture` support. `SkSurface.captureFrameAsSkPicture` is a helper function to
    capture an `SkPicture`, which can be dumped to disk (for debugging) with
    `SkPicture.DEBUGONLY_saveAsFile`.
+ - `SkImage.readPixels`, which returns a TypedArray of pixel values (safe to use
+   anywhere, doesn't need a delete()).
 
 ### Changed
  - Better `GrGLCaps` support for WebGL - this shouldn't have any impacts on APIs or

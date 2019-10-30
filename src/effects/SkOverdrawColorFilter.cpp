@@ -5,22 +5,22 @@
  * found in the LICENSE file.
  */
 
-#include "SkArenaAlloc.h"
-#include "SkEffectPriv.h"
-#include "SkOverdrawColorFilter.h"
-#include "SkRasterPipeline.h"
-#include "SkReadBuffer.h"
+#include "include/effects/SkOverdrawColorFilter.h"
+#include "src/core/SkArenaAlloc.h"
+#include "src/core/SkEffectPriv.h"
+#include "src/core/SkRasterPipeline.h"
+#include "src/core/SkReadBuffer.h"
 
 #if SK_SUPPORT_GPU
-#include "effects/GrSkSLFP.h"
+#include "src/gpu/effects/GrSkSLFP.h"
 
 GR_FP_SRC_STRING SKSL_OVERDRAW_SRC = R"(
-layout(ctype=SkPMColor) in uniform half4 color0;
-layout(ctype=SkPMColor) in uniform half4 color1;
-layout(ctype=SkPMColor) in uniform half4 color2;
-layout(ctype=SkPMColor) in uniform half4 color3;
-layout(ctype=SkPMColor) in uniform half4 color4;
-layout(ctype=SkPMColor) in uniform half4 color5;
+layout(ctype=SkPMColor) uniform half4 color0;
+layout(ctype=SkPMColor) uniform half4 color1;
+layout(ctype=SkPMColor) uniform half4 color2;
+layout(ctype=SkPMColor) uniform half4 color3;
+layout(ctype=SkPMColor) uniform half4 color4;
+layout(ctype=SkPMColor) uniform half4 color5;
 
 void main(inout half4 color) {
     half alpha = 255.0 * color.a;
@@ -85,10 +85,10 @@ void SkOverdrawColorFilter::RegisterFlattenables() {
 }
 #if SK_SUPPORT_GPU
 
-#include "GrRecordingContext.h"
+#include "include/private/GrRecordingContext.h"
 
 std::unique_ptr<GrFragmentProcessor> SkOverdrawColorFilter::asFragmentProcessor(
-        GrRecordingContext* context, const GrColorSpaceInfo&) const {
+        GrRecordingContext* context, const GrColorInfo&) const {
     static int overdrawIndex = GrSkSLFP::NewIndex();
     return GrSkSLFP::Make(context, overdrawIndex, "Overdraw", SKSL_OVERDRAW_SRC, fColors,
                           sizeof(fColors));

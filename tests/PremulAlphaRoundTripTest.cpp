@@ -5,12 +5,12 @@
  * found in the LICENSE file.
  */
 
-#include "SkCanvas.h"
-#include "SkSurface.h"
-#include "Test.h"
-#include "ToolUtils.h"
+#include "include/core/SkCanvas.h"
+#include "include/core/SkSurface.h"
+#include "tests/Test.h"
+#include "tools/ToolUtils.h"
 
-#include "GrContext.h"
+#include "include/gpu/GrContext.h"
 
 static uint32_t pack_unpremul_rgba(SkColor c) {
     uint32_t packed;
@@ -54,8 +54,7 @@ static void fill_surface(SkSurface* surf, SkColorType colorType, PackUnpremulPro
         }
     }
 
-    const SkImageInfo info = SkImageInfo::Make(bmp.width(), bmp.height(),
-                                               colorType, kUnpremul_SkAlphaType);
+    const SkImageInfo info = SkImageInfo::Make(bmp.dimensions(), colorType, kUnpremul_SkAlphaType);
     surf->writePixels({info, bmp.getPixels(), bmp.rowBytes()}, 0, 0);
 }
 

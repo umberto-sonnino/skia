@@ -4,26 +4,26 @@
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
-#include "Sample.h"
+#include "samplecode/Sample.h"
 
-#include "SkBlurMaskFilter.h"
-#include "SkCanvas.h"
-#include "SkColorFilter.h"
-#include "SkColorPriv.h"
-#include "SkColorShader.h"
-#include "SkGradientShader.h"
-#include "SkGraphics.h"
-#include "SkOSFile.h"
-#include "SkPath.h"
-#include "SkRandom.h"
-#include "SkRegion.h"
-#include "SkShader.h"
-#include "SkShaper.h"
-#include "SkStream.h"
-#include "SkTextBlob.h"
-#include "SkTime.h"
-#include "SkTypeface.h"
-#include "SkUTF.h"
+#include "include/core/SkCanvas.h"
+#include "include/core/SkColorFilter.h"
+#include "include/core/SkColorPriv.h"
+#include "include/core/SkGraphics.h"
+#include "include/core/SkPath.h"
+#include "include/core/SkRegion.h"
+#include "include/core/SkShader.h"
+#include "include/core/SkStream.h"
+#include "include/core/SkTextBlob.h"
+#include "include/core/SkTime.h"
+#include "include/core/SkTypeface.h"
+#include "include/effects/SkBlurMaskFilter.h"
+#include "include/effects/SkGradientShader.h"
+#include "include/utils/SkRandom.h"
+#include "modules/skshaper/include/SkShaper.h"
+#include "src/core/SkOSFile.h"
+#include "src/shaders/SkColorShader.h"
+#include "src/utils/SkUTF.h"
 
 static const char gText[] =
     "When in the Course of human events it becomes necessary for one people "
@@ -38,13 +38,7 @@ public:
     TextBoxView() : fShaper(SkShaper::Make()) {}
 
 protected:
-    bool onQuery(Sample::Event* evt) override {
-        if (Sample::TitleQ(*evt)) {
-            Sample::TitleR(evt, "TextBox");
-            return true;
-        }
-        return this->INHERITED::onQuery(evt);
-    }
+    SkString name() override { return SkString("TextBox"); }
 
     void drawTest(SkCanvas* canvas, SkScalar w, SkScalar h, SkColor fg, SkColor bg) {
         SkAutoCanvasRestore acr(canvas, true);
@@ -59,10 +53,39 @@ protected:
 
         for (int i = 9; i < 24; i += 2) {
             SkTextBlobBuilderRunHandler builder(gText, { margin, margin });
-            SkFont font(nullptr, SkIntToScalar(i));
-            font.setEdging(SkFont::Edging::kSubpixelAntiAlias);
+            SkFont srcFont(nullptr, SkIntToScalar(i));
+            srcFont.setEdging(SkFont::Edging::kSubpixelAntiAlias);
 
-            fShaper->shape(gText, strlen(gText), font, true, w - margin, &builder);
+            const char* utf8 = gText;
+            size_t utf8Bytes = sizeof(gText) - 1;
+
+            std::unique_ptr<SkShaper::BiDiRunIterator> bidi(
+                SkShaper::MakeBiDiRunIterator(utf8, utf8Bytes, 0xfe));
+            if (!bidi) {
+                return;
+            }
+
+            std::unique_ptr<SkShaper::LanguageRunIterator> language(
+                SkShaper::MakeStdLanguageRunIterator(utf8, utf8Bytes));
+            if (!language) {
+                return;
+            }
+
+            SkFourByteTag undeterminedScript = SkSetFourByteTag('Z','y','y','y');
+            std::unique_ptr<SkShaper::ScriptRunIterator> script(
+                SkShaper::MakeScriptRunIterator(utf8, utf8Bytes, undeterminedScript));
+            if (!script) {
+                return;
+            }
+
+            std::unique_ptr<SkShaper::FontRunIterator> font(
+                SkShaper::MakeFontMgrRunIterator(utf8, utf8Bytes, srcFont, SkFontMgr::RefDefault(),
+                                                 "Arial", SkFontStyle::Bold(), &*language));
+            if (!font) {
+                return;
+            }
+
+            fShaper->shape(utf8, utf8Bytes, *font, *bidi, *script, *language, w - margin, &builder);
             canvas->drawTextBlob(builder.makeBlob(), 0, 0, paint);
 
             canvas->translate(0, builder.endPoint().y());

@@ -8,9 +8,9 @@
 #ifndef SkOpts_DEFINED
 #define SkOpts_DEFINED
 
-#include "SkRasterPipeline.h"
-#include "SkTypes.h"
-#include "SkXfermodePriv.h"
+#include "include/core/SkTypes.h"
+#include "src/core/SkRasterPipeline.h"
+#include "src/core/SkXfermodePriv.h"
 
 struct SkBitmapProcState;
 
@@ -48,6 +48,12 @@ namespace SkOpts {
     extern void SK_API (*memset32)(uint32_t[], uint32_t, int);
     extern void (*memset64)(uint64_t[], uint64_t, int);
 
+    extern void (*rect_memset16)(uint16_t[], uint16_t, int, size_t, int);
+    extern void (*rect_memset32)(uint32_t[], uint32_t, int, size_t, int);
+    extern void (*rect_memset64)(uint64_t[], uint64_t, int, size_t, int);
+
+    extern float (*cubic_solver)(float, float, float, float);
+
     // The fastest high quality 32-bit hash we can provide on this platform.
     extern uint32_t (*hash_fn)(const void*, size_t, uint32_t seed);
     static inline uint32_t hash(const void* data, size_t bytes, uint32_t seed=0) {
@@ -55,9 +61,10 @@ namespace SkOpts {
     }
 
     // SkBitmapProcState optimized Shader, Sample, or Matrix procs.
-    // This is the only one that can use anything past SSE2/NEON.
     extern void (*S32_alpha_D32_filter_DX)(const SkBitmapProcState&,
                                            const uint32_t* xy, int count, SkPMColor*);
+    extern void (*S32_alpha_D32_filter_DXDY)(const SkBitmapProcState&,
+                                             const uint32_t* xy, int count, SkPMColor*);
 
 #define M(st) +1
     // We can't necessarily express the type of SkJumper stage functions here,
@@ -69,6 +76,7 @@ namespace SkOpts {
     extern void (*start_pipeline_highp)(size_t,size_t,size_t,size_t, void**);
     extern void (*start_pipeline_lowp )(size_t,size_t,size_t,size_t, void**);
 #undef M
+
 }
 
 #endif//SkOpts_DEFINED

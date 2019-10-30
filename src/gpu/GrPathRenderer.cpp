@@ -5,14 +5,14 @@
  * found in the LICENSE file.
  */
 
-#include "GrPathRenderer.h"
-#include "GrCaps.h"
-#include "GrPaint.h"
-#include "GrRecordingContextPriv.h"
-#include "GrRenderTargetContext.h"
-#include "GrShape.h"
-#include "GrUserStencilSettings.h"
-#include "SkDrawProcs.h"
+#include "src/core/SkDrawProcs.h"
+#include "src/gpu/GrCaps.h"
+#include "src/gpu/GrPaint.h"
+#include "src/gpu/GrPathRenderer.h"
+#include "src/gpu/GrRecordingContextPriv.h"
+#include "src/gpu/GrRenderTargetContext.h"
+#include "src/gpu/GrUserStencilSettings.h"
+#include "src/gpu/geometry/GrShape.h"
 
 #ifdef SK_DEBUG
 void GrPathRenderer::StencilPathArgs::validate() const {
@@ -45,17 +45,15 @@ bool GrPathRenderer::drawPath(const DrawPathArgs& args) {
     args.validate();
     CanDrawPathArgs canArgs;
     canArgs.fCaps = args.fContext->priv().caps();
+    canArgs.fProxy = args.fRenderTargetContext->proxy();
     canArgs.fClipConservativeBounds = args.fClipConservativeBounds;
     canArgs.fViewMatrix = args.fViewMatrix;
     canArgs.fShape = args.fShape;
-    canArgs.fAATypeFlags = args.fAATypeFlags;
+    canArgs.fAAType = args.fAAType;
     canArgs.fTargetIsWrappedVkSecondaryCB = args.fRenderTargetContext->wrapsVkSecondaryCB();
     canArgs.validate();
 
     canArgs.fHasUserStencilSettings = !args.fUserStencilSettings->isUnused();
-    if (AATypeFlags::kMixedSampledStencilThenCover & canArgs.fAATypeFlags) {
-        SkASSERT(GrFSAAType::kMixedSamples == args.fRenderTargetContext->fsaaType());
-    }
     SkASSERT(CanDrawPath::kNo != this->canDrawPath(canArgs));
     if (!args.fUserStencilSettings->isUnused()) {
         SkPath path;
@@ -83,13 +81,12 @@ bool GrPathRenderer::IsStrokeHairlineOrEquivalent(const GrStyle& style, const Sk
            SkDrawTreatAAStrokeAsHairline(stroke.getWidth(), matrix, outCoverage);
 }
 
-
 void GrPathRenderer::GetPathDevBounds(const SkPath& path,
-                                      int devW, int devH,
+                                      SkISize devSize,
                                       const SkMatrix& matrix,
                                       SkRect* bounds) {
     if (path.isInverseFillType()) {
-        *bounds = SkRect::MakeWH(SkIntToScalar(devW), SkIntToScalar(devH));
+        *bounds = SkRect::Make(devSize);
         return;
     }
     *bounds = path.getBounds();
@@ -116,9 +113,7 @@ void GrPathRenderer::onStencilPath(const StencilPathArgs& args) {
                           args.fClipConservativeBounds,
                           args.fViewMatrix,
                           args.fShape,
-                          (GrAA::kYes == args.fDoStencilMSAA)
-                                  ? AATypeFlags::kMSAA
-                                  : AATypeFlags::kNone,
+                          (GrAA::kYes == args.fDoStencilMSAA) ? GrAAType::kMSAA : GrAAType::kNone,
                           false};
     this->drawPath(drawArgs);
 }

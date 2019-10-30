@@ -65,11 +65,18 @@ var nullptr = 0; // emscripten doesn't like to take null as uintptr_t
 
 // arr can be a normal JS array or a TypedArray
 // dest is something like CanvasKit.HEAPF32
-function copy1dArray(arr, dest) {
+// ptr can be optionally provided if the memory was already allocated.
+function copy1dArray(arr, dest, ptr) {
   if (!arr || !arr.length) {
     return nullptr;
   }
-  var ptr = CanvasKit._malloc(arr.length * dest.BYTES_PER_ELEMENT);
+  // This was created with CanvasKit.Malloc, so it's already been copied.
+  if (arr['_ck']) {
+    return arr.byteOffset;
+  }
+  if (!ptr) {
+    ptr = CanvasKit._malloc(arr.length * dest.BYTES_PER_ELEMENT);
+  }
   // In c++ terms, the WASM heap is a uint8_t*, a long buffer/array of single
   // byte elements. When we run _malloc, we always get an offset/pointer into
   // that block of memory.
@@ -86,11 +93,14 @@ function copy1dArray(arr, dest) {
 // arr should be a non-jagged 2d JS array (TypedArrays can't be nested
 //     inside themselves.)
 // dest is something like CanvasKit.HEAPF32
-function copy2dArray(arr, dest) {
+// ptr can be optionally provided if the memory was already allocated.
+function copy2dArray(arr, dest, ptr) {
   if (!arr || !arr.length) {
     return nullptr;
   }
-  var ptr = CanvasKit._malloc(arr.length * arr[0].length * dest.BYTES_PER_ELEMENT);
+  if (!ptr) {
+    ptr = CanvasKit._malloc(arr.length * arr[0].length * dest.BYTES_PER_ELEMENT);
+  }
   var idx = 0;
   var adjustedPtr = ptr / dest.BYTES_PER_ELEMENT;
   for (var r = 0; r < arr.length; r++) {
@@ -105,11 +115,14 @@ function copy2dArray(arr, dest) {
 // arr should be a non-jagged 3d JS array (TypedArrays can't be nested
 //     inside themselves.)
 // dest is something like CanvasKit.HEAPF32
-function copy3dArray(arr, dest) {
+// ptr can be optionally provided if the memory was already allocated.
+function copy3dArray(arr, dest, ptr) {
   if (!arr || !arr.length || !arr[0].length) {
     return nullptr;
   }
-  var ptr = CanvasKit._malloc(arr.length * arr[0].length * arr[0][0].length * dest.BYTES_PER_ELEMENT);
+  if (!ptr) {
+    ptr = CanvasKit._malloc(arr.length * arr[0].length * arr[0][0].length * dest.BYTES_PER_ELEMENT);
+  }
   var idx = 0;
   var adjustedPtr = ptr / dest.BYTES_PER_ELEMENT;
   for (var x = 0; x < arr.length; x++) {
@@ -385,3 +398,27 @@ CanvasKit.RSXFormBuilder = CanvasKit.FourFloatArrayHelper;
  * the array every time.
  */
 CanvasKit.SkColorBuilder = CanvasKit.OneUIntArrayHelper;
+
+/**
+ * Malloc returns a TypedArray backed by the C++ memory of the
+ * given length. It should only be used by advanced users who
+ * can manage memory and initialize values properly. When used
+ * correctly, it can save copying of data between JS and C++.
+ * When used incorrectly, it can lead to memory leaks.
+ *
+ * const ta = CanvasKit.Malloc(Float32Array, 20);
+ * // store data into ta
+ * const cf = CanvasKit.SkColorFilter.MakeMatrix(ta);
+ * // MakeMatrix cleans up the ptr automatically.
+ *
+ * @param {TypedArray} typedArray - constructor for the typedArray.
+ * @param {number} len - number of elements to store.
+ */
+CanvasKit.Malloc = function(typedArray, len) {
+  var byteLen = len * typedArray.BYTES_PER_ELEMENT;
+  var ptr = CanvasKit._malloc(byteLen);
+  var ta = new typedArray(CanvasKit.buffer, ptr, len);
+  // add a marker that this was allocated in C++ land
+  ta['_ck'] = true;
+  return ta;
+}

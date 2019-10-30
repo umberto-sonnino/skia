@@ -5,27 +5,27 @@
  * found in the LICENSE file.
  */
 
-#include "SkPictureShader.h"
+#include "src/shaders/SkPictureShader.h"
 
-#include "SkArenaAlloc.h"
-#include "SkBitmap.h"
-#include "SkBitmapProcShader.h"
-#include "SkCanvas.h"
-#include "SkImage.h"
-#include "SkImageShader.h"
-#include "SkMatrixUtils.h"
-#include "SkPicturePriv.h"
-#include "SkReadBuffer.h"
-#include "SkResourceCache.h"
+#include "include/core/SkBitmap.h"
+#include "include/core/SkCanvas.h"
+#include "include/core/SkImage.h"
+#include "src/core/SkArenaAlloc.h"
+#include "src/core/SkMatrixUtils.h"
+#include "src/core/SkPicturePriv.h"
+#include "src/core/SkReadBuffer.h"
+#include "src/core/SkResourceCache.h"
+#include "src/shaders/SkBitmapProcShader.h"
+#include "src/shaders/SkImageShader.h"
 #include <atomic>
 
 #if SK_SUPPORT_GPU
-#include "GrCaps.h"
-#include "GrColorSpaceInfo.h"
-#include "GrFragmentProcessor.h"
-#include "GrRecordingContext.h"
-#include "GrRecordingContextPriv.h"
-#include "SkGr.h"
+#include "include/private/GrRecordingContext.h"
+#include "src/gpu/GrCaps.h"
+#include "src/gpu/GrColorInfo.h"
+#include "src/gpu/GrFragmentProcessor.h"
+#include "src/gpu/GrRecordingContextPriv.h"
+#include "src/gpu/SkGr.h"
 #endif
 
 sk_sp<SkShader> SkPicture::makeShader(SkTileMode tmx, SkTileMode tmy, const SkMatrix* localMatrix,
@@ -140,6 +140,22 @@ sk_sp<SkShader> SkPictureShader::Make(sk_sp<SkPicture> picture, SkTileMode tmx, 
         return SkShaders::Empty();
     }
     return sk_sp<SkShader>(new SkPictureShader(std::move(picture), tmx, tmy, localMatrix, tile));
+}
+
+SkPicture* SkPictureShader::isAPicture(SkMatrix* matrix,
+                                       SkTileMode tileModes[2],
+                                       SkRect* tile) const {
+    if (matrix) {
+        *matrix = this->getLocalMatrix();
+    }
+    if (tileModes) {
+        tileModes[0] = fTmx;
+        tileModes[1] = fTmy;
+    }
+    if (tile) {
+        *tile = fTile;
+    }
+    return fPicture.get();
 }
 
 sk_sp<SkFlattenable> SkPictureShader::CreateProc(SkReadBuffer& buffer) {
@@ -318,8 +334,8 @@ void SkPictureShader::PictureShaderContext::shadeSpan(int x, int y, SkPMColor ds
 }
 
 #if SK_SUPPORT_GPU
-#include "GrContext.h"
-#include "GrContextPriv.h"
+#include "include/gpu/GrContext.h"
+#include "src/gpu/GrContextPriv.h"
 
 std::unique_ptr<GrFragmentProcessor> SkPictureShader::asFragmentProcessor(
         const GrFPArgs& args) const {
@@ -329,17 +345,19 @@ std::unique_ptr<GrFragmentProcessor> SkPictureShader::asFragmentProcessor(
     }
 
     auto lm = this->totalLocalMatrix(args.fPreLocalMatrix, args.fPostLocalMatrix);
-    SkColorType dstColorType = kN32_SkColorType;
-    GrPixelConfigToColorType(args.fDstColorSpaceInfo->config(), &dstColorType);
+    SkColorType dstColorType = GrColorTypeToSkColorType(args.fDstColorInfo->colorType());
+    if (dstColorType == kUnknown_SkColorType) {
+        dstColorType = kRGBA_8888_SkColorType;
+    }
     sk_sp<SkShader> bitmapShader(this->refBitmapShader(*args.fViewMatrix, &lm, dstColorType,
-                                                       args.fDstColorSpaceInfo->colorSpace(),
+                                                       args.fDstColorInfo->colorSpace(),
                                                        maxTextureSize));
     if (!bitmapShader) {
         return nullptr;
     }
 
     // We want to *reset* args.fPreLocalMatrix, not compose it.
-    GrFPArgs newArgs(args.fContext, args.fViewMatrix, args.fFilterQuality, args.fDstColorSpaceInfo);
+    GrFPArgs newArgs(args.fContext, args.fViewMatrix, args.fFilterQuality, args.fDstColorInfo);
     newArgs.fPreLocalMatrix = lm.get();
 
     return as_SB(bitmapShader)->asFragmentProcessor(newArgs);

@@ -5,11 +5,11 @@
  * found in the LICENSE file.
  */
 
-#include "SkBlitter.h"
-#include "SkPath.h"
-#include "SkRegion.h"
-#include "SkScan.h"
-#include "Test.h"
+#include "include/core/SkPath.h"
+#include "include/core/SkRegion.h"
+#include "src/core/SkBlitter.h"
+#include "src/core/SkScan.h"
+#include "tests/Test.h"
 
 struct FakeBlitter : public SkBlitter {
     FakeBlitter()
@@ -36,7 +36,7 @@ DEF_TEST(FillPathInverse, reporter) {
     int height = 100;
     int width  = 200;
     int expected_lines = 5;
-    clip.set(0, height - expected_lines, width, height);
+    clip.setLTRB(0, height - expected_lines, width, height);
     path.moveTo(0.0f, 0.0f)
         .quadTo(SkIntToScalar(width/2), SkIntToScalar(height),
               SkIntToScalar(width), 0.0f)

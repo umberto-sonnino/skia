@@ -8,8 +8,8 @@
 #ifndef SkOverdrawCanvas_DEFINED
 #define SkOverdrawCanvas_DEFINED
 
-#include "SkCanvasVirtualEnforcer.h"
-#include "SkNWayCanvas.h"
+#include "include/core/SkCanvasVirtualEnforcer.h"
+#include "include/utils/SkNWayCanvas.h"
 
 /**
  *  Captures all drawing commands.  Rather than draw the actual content, this device
@@ -25,6 +25,7 @@ public:
     void onDrawPatch(const SkPoint[12], const SkColor[4], const SkPoint[4], SkBlendMode,
                      const SkPaint&) override;
     void onDrawPaint(const SkPaint&) override;
+    void onDrawBehind(const SkPaint& paint) override;
     void onDrawRect(const SkRect&, const SkPaint&) override;
     void onDrawRegion(const SkRegion&, const SkPaint&) override;
     void onDrawOval(const SkRect&, const SkPaint&) override;
@@ -54,7 +55,7 @@ public:
     void onDrawAnnotation(const SkRect&, const char key[], SkData* value) override;
     void onDrawShadowRec(const SkPath&, const SkDrawShadowRec&) override;
 
-    void onDrawEdgeAAQuad(const SkRect&, const SkPoint[4], SkCanvas::QuadAAFlags, SkColor,
+    void onDrawEdgeAAQuad(const SkRect&, const SkPoint[4], SkCanvas::QuadAAFlags, const SkColor4f&,
                           SkBlendMode) override;
     void onDrawEdgeAAImageSet(const ImageSetEntry[], int count, const SkPoint[], const SkMatrix[],
                               const SkPaint*, SrcRectConstraint) override;

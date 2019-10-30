@@ -6,9 +6,9 @@
  * found in the LICENSE file.
  */
 
-#include "../GLWindowContext.h"
-#include "WindowContextFactory_unix.h"
-#include "gl/GrGLInterface.h"
+#include "include/gpu/gl/GrGLInterface.h"
+#include "tools/sk_app/GLWindowContext.h"
+#include "tools/sk_app/unix/WindowContextFactory_unix.h"
 
 #include <GL/gl.h>
 
@@ -182,10 +182,10 @@ namespace sk_app {
 
 namespace window_context_factory {
 
-WindowContext* NewGLForXlib(const XlibWindowInfo& winInfo, const DisplayParams& params) {
-    WindowContext* ctx = new GLWindowContext_xlib(winInfo, params);
+std::unique_ptr<WindowContext> MakeGLForXlib(const XlibWindowInfo& winInfo,
+                                             const DisplayParams& params) {
+    std::unique_ptr<WindowContext> ctx(new GLWindowContext_xlib(winInfo, params));
     if (!ctx->isValid()) {
-        delete ctx;
         return nullptr;
     }
     return ctx;

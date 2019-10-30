@@ -5,10 +5,24 @@
  * found in the LICENSE file.
  */
 
-#include "SkBlurImageFilter.h"
-#include "SkSurface.h"
-#include "ToolUtils.h"
-#include "gm.h"
+#include "gm/gm.h"
+#include "include/core/SkCanvas.h"
+#include "include/core/SkColor.h"
+#include "include/core/SkImage.h"
+#include "include/core/SkImageFilter.h"
+#include "include/core/SkImageInfo.h"
+#include "include/core/SkPaint.h"
+#include "include/core/SkRect.h"
+#include "include/core/SkRefCnt.h"
+#include "include/core/SkScalar.h"
+#include "include/core/SkSize.h"
+#include "include/core/SkString.h"
+#include "include/core/SkSurface.h"
+#include "include/effects/SkImageFilters.h"
+#include "tools/ToolUtils.h"
+
+#include <initializer_list>
+#include <utility>
 
 static sk_sp<SkImage> make_image(SkCanvas* canvas) {
     SkImageInfo info = SkImageInfo::MakeN32Premul(250, 200);
@@ -70,20 +84,17 @@ protected:
             canvas->save();
 
             // x-only blur
-            filter =  SkBlurImageFilter::Make(sigma, 0.0f, nullptr, nullptr,
-                                              SkBlurImageFilter::kClamp_TileMode);
+            filter =  SkImageFilters::Blur(sigma, 0.0f, SkTileMode::kClamp, nullptr);
             draw_image(canvas, image, std::move(filter));
             canvas->translate(image->width() + 20, 0);
 
             // y-only blur
-            filter = SkBlurImageFilter::Make(0.0f, sigma, nullptr, nullptr,
-                                             SkBlurImageFilter::kClamp_TileMode);
+            filter = SkImageFilters::Blur(0.0f, sigma, SkTileMode::kClamp, nullptr);
             draw_image(canvas, image, std::move(filter));
             canvas->translate(image->width() + 20, 0);
 
             // both directions
-            filter = SkBlurImageFilter::Make(sigma, sigma, nullptr, nullptr,
-                                             SkBlurImageFilter::kClamp_TileMode);
+            filter = SkImageFilters::Blur(sigma, sigma, SkTileMode::kClamp, nullptr);
             draw_image(canvas, image, std::move(filter));
             canvas->translate(image->width() + 20, 0);
 

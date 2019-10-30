@@ -5,19 +5,20 @@
  * found in the LICENSE file.
  */
 
-#include "GrFillRRectOp.h"
+#include "src/gpu/ops/GrFillRRectOp.h"
 
-#include "GrCaps.h"
-#include "GrGpuCommandBuffer.h"
-#include "GrMemoryPool.h"
-#include "GrOpFlushState.h"
-#include "GrRecordingContext.h"
-#include "GrRecordingContextPriv.h"
-#include "SkRRectPriv.h"
-#include "glsl/GrGLSLFragmentShaderBuilder.h"
-#include "glsl/GrGLSLGeometryProcessor.h"
-#include "glsl/GrGLSLVarying.h"
-#include "glsl/GrGLSLVertexGeoBuilder.h"
+#include "include/private/GrRecordingContext.h"
+#include "src/core/SkRRectPriv.h"
+#include "src/gpu/GrCaps.h"
+#include "src/gpu/GrMemoryPool.h"
+#include "src/gpu/GrOpFlushState.h"
+#include "src/gpu/GrOpsRenderPass.h"
+#include "src/gpu/GrProgramInfo.h"
+#include "src/gpu/GrRecordingContextPriv.h"
+#include "src/gpu/glsl/GrGLSLFragmentShaderBuilder.h"
+#include "src/gpu/glsl/GrGLSLGeometryProcessor.h"
+#include "src/gpu/glsl/GrGLSLVarying.h"
+#include "src/gpu/glsl/GrGLSLVertexGeoBuilder.h"
 
 // Hardware derivatives are not always accurate enough for highly elliptical corners. This method
 // checks to make sure the corners will still all look good if we use HW derivatives.
@@ -102,7 +103,7 @@ GrFillRRectOp::GrFillRRectOp(
         , fFlags(flags)
         , fProcessors(std::move(paint)) {
     SkASSERT((fFlags & Flags::kHasPerspective) == totalShapeMatrix.hasPerspective());
-    this->setBounds(devBounds, GrOp::HasAABloat::kYes, GrOp::IsZeroArea::kNo);
+    this->setBounds(devBounds, GrOp::HasAABloat::kYes, GrOp::IsHairline::kNo);
 
     // Write the matrix attribs.
     const SkMatrix& m = totalShapeMatrix;
@@ -126,15 +127,17 @@ GrFillRRectOp::GrFillRRectOp(
     // We will write the color and local rect attribs during finalize().
 }
 
-GrProcessorSet::Analysis GrFillRRectOp::finalize(const GrCaps& caps, const GrAppliedClip* clip,
-                                                 GrFSAAType fsaaType, GrClampType clampType) {
+GrProcessorSet::Analysis GrFillRRectOp::finalize(
+        const GrCaps& caps, const GrAppliedClip* clip, bool hasMixedSampledCoverage,
+        GrClampType clampType) {
     SkASSERT(1 == fInstanceCount);
 
     SkPMColor4f overrideColor;
     const GrProcessorSet::Analysis& analysis = fProcessors.finalize(
 
             fOriginalColor, GrProcessorAnalysisCoverage::kSingleChannel, clip,
-            &GrUserStencilSettings::kUnused, fsaaType, caps, clampType, &overrideColor);
+            &GrUserStencilSettings::kUnused, hasMixedSampledCoverage, caps, clampType,
+            &overrideColor);
 
     // Finish writing the instance attribs.
     SkPMColor4f finalColor = analysis.inputColorIsOverridden() ? overrideColor : fOriginalColor;
@@ -167,14 +170,6 @@ GrDrawOp::CombineResult GrFillRRectOp::onCombineIfPossible(GrOp* op, const GrCap
     fInstanceCount += that.fInstanceCount;
     SkASSERT(fInstanceStride == that.fInstanceStride);
     return CombineResult::kMerged;
-}
-
-void GrFillRRectOp::onPrepare(GrOpFlushState* flushState) {
-    if (void* instanceData = flushState->makeVertexSpace(fInstanceStride, fInstanceCount,
-                                                         &fInstanceBuffer, &fBaseInstance)) {
-        SkASSERT(fInstanceStride * fInstanceCount == fInstanceData.count());
-        memcpy(instanceData, fInstanceData.begin(), fInstanceData.count());
-    }
 }
 
 class GrFillRRectOp::Processor : public GrGeometryProcessor {
@@ -367,6 +362,123 @@ static constexpr uint16_t kCoverageIndexData[] = {
 
 GR_DECLARE_STATIC_UNIQUE_KEY(gCoverageIndexBufferKey);
 
+
+// Our MSAA geometry consists of an inset octagon with full sample mask coverage, circumscribed
+// by a larger octagon that modifies the sample mask for the arc at each corresponding corner.
+struct MSAAVertex {
+    std::array<float, 4> fRadiiSelector;
+    std::array<float, 2> fCorner;
+    std::array<float, 2> fRadiusOutset;
+};
+
+static constexpr MSAAVertex kMSAAVertexData[] = {
+        // Left edge. (Negative radii selector indicates this is not an arc section.)
+        {{{0,0,0,-1}},  {{-1,+1}},  {{0,-1}}},
+        {{{-1,0,0,0}},  {{-1,-1}},  {{0,+1}}},
+
+        // Top edge.
+        {{{-1,0,0,0}},  {{-1,-1}},  {{+1,0}}},
+        {{{0,-1,0,0}},  {{+1,-1}},  {{-1,0}}},
+
+        // Right edge.
+        {{{0,-1,0,0}},  {{+1,-1}},  {{0,+1}}},
+        {{{0,0,-1,0}},  {{+1,+1}},  {{0,-1}}},
+
+        // Bottom edge.
+        {{{0,0,-1,0}},  {{+1,+1}},  {{-1,0}}},
+        {{{0,0,0,-1}},  {{-1,+1}},  {{+1,0}}},
+
+        // Top-left corner.
+        {{{1,0,0,0}},  {{-1,-1}},  {{0,+1}}},
+        {{{1,0,0,0}},  {{-1,-1}},  {{0,+kOctoOffset}}},
+        {{{1,0,0,0}},  {{-1,-1}},  {{+1,0}}},
+        {{{1,0,0,0}},  {{-1,-1}},  {{+kOctoOffset,0}}},
+
+        // Top-right corner.
+        {{{0,1,0,0}},  {{+1,-1}},  {{-1,0}}},
+        {{{0,1,0,0}},  {{+1,-1}},  {{-kOctoOffset,0}}},
+        {{{0,1,0,0}},  {{+1,-1}},  {{0,+1}}},
+        {{{0,1,0,0}},  {{+1,-1}},  {{0,+kOctoOffset}}},
+
+        // Bottom-right corner.
+        {{{0,0,1,0}},  {{+1,+1}},  {{0,-1}}},
+        {{{0,0,1,0}},  {{+1,+1}},  {{0,-kOctoOffset}}},
+        {{{0,0,1,0}},  {{+1,+1}},  {{-1,0}}},
+        {{{0,0,1,0}},  {{+1,+1}},  {{-kOctoOffset,0}}},
+
+        // Bottom-left corner.
+        {{{0,0,0,1}},  {{-1,+1}},  {{+1,0}}},
+        {{{0,0,0,1}},  {{-1,+1}},  {{+kOctoOffset,0}}},
+        {{{0,0,0,1}},  {{-1,+1}},  {{0,-1}}},
+        {{{0,0,0,1}},  {{-1,+1}},  {{0,-kOctoOffset}}}};
+
+GR_DECLARE_STATIC_UNIQUE_KEY(gMSAAVertexBufferKey);
+
+static constexpr uint16_t kMSAAIndexData[] = {
+        // Inset octagon. (Full sample mask.)
+        0, 1, 2,
+        0, 2, 3,
+        0, 3, 6,
+        3, 4, 5,
+        3, 5, 6,
+        6, 7, 0,
+
+        // Top-left arc. (Sample mask is set to the arc.)
+         8,  9, 10,
+         9, 11, 10,
+
+        // Top-right arc.
+        12, 13, 14,
+        13, 15, 14,
+
+        // Bottom-right arc.
+        16, 17, 18,
+        17, 19, 18,
+
+        // Bottom-left arc.
+        20, 21, 22,
+        21, 23, 22};
+
+GR_DECLARE_STATIC_UNIQUE_KEY(gMSAAIndexBufferKey);
+
+void GrFillRRectOp::onPrepare(GrOpFlushState* flushState) {
+    if (void* instanceData = flushState->makeVertexSpace(fInstanceStride, fInstanceCount,
+                                                         &fInstanceBuffer, &fBaseInstance)) {
+        SkASSERT(fInstanceStride * fInstanceCount == fInstanceData.count());
+        memcpy(instanceData, fInstanceData.begin(), fInstanceData.count());
+    }
+
+    if (GrAAType::kCoverage == fAAType) {
+        GR_DEFINE_STATIC_UNIQUE_KEY(gCoverageIndexBufferKey);
+
+        fIndexBuffer = flushState->resourceProvider()->findOrMakeStaticBuffer(
+                GrGpuBufferType::kIndex, sizeof(kCoverageIndexData), kCoverageIndexData,
+                gCoverageIndexBufferKey);
+
+        GR_DEFINE_STATIC_UNIQUE_KEY(gCoverageVertexBufferKey);
+
+        fVertexBuffer = flushState->resourceProvider()->findOrMakeStaticBuffer(
+                GrGpuBufferType::kVertex, sizeof(kCoverageVertexData), kCoverageVertexData,
+                gCoverageVertexBufferKey);
+
+        fIndexCount = SK_ARRAY_COUNT(kCoverageIndexData);
+    } else {
+        GR_DEFINE_STATIC_UNIQUE_KEY(gMSAAIndexBufferKey);
+
+        fIndexBuffer = flushState->resourceProvider()->findOrMakeStaticBuffer(
+                GrGpuBufferType::kIndex, sizeof(kMSAAIndexData), kMSAAIndexData,
+                gMSAAIndexBufferKey);
+
+        GR_DEFINE_STATIC_UNIQUE_KEY(gMSAAVertexBufferKey);
+
+        fVertexBuffer = flushState->resourceProvider()->findOrMakeStaticBuffer(
+                GrGpuBufferType::kVertex, sizeof(kMSAAVertexData), kMSAAVertexData,
+                gMSAAVertexBufferKey);
+
+        fIndexCount = SK_ARRAY_COUNT(kMSAAIndexData);
+    }
+}
+
 class GrFillRRectOp::Processor::CoverageImpl : public GrGLSLGeometryProcessor {
     void onEmitCode(EmitArgs& args, GrGPArgs* gpArgs) override {
         const auto& proc = args.fGP.cast<Processor>();
@@ -503,83 +615,6 @@ class GrFillRRectOp::Processor::CoverageImpl : public GrGLSLGeometryProcessor {
     }
 };
 
-// Our MSAA geometry consists of an inset octagon with full sample mask coverage, circumscribed
-// by a larger octagon that modifies the sample mask for the arc at each corresponding corner.
-struct MSAAVertex {
-    std::array<float, 4> fRadiiSelector;
-    std::array<float, 2> fCorner;
-    std::array<float, 2> fRadiusOutset;
-};
-
-static constexpr MSAAVertex kMSAAVertexData[] = {
-        // Left edge. (Negative radii selector indicates this is not an arc section.)
-        {{{0,0,0,-1}},  {{-1,+1}},  {{0,-1}}},
-        {{{-1,0,0,0}},  {{-1,-1}},  {{0,+1}}},
-
-        // Top edge.
-        {{{-1,0,0,0}},  {{-1,-1}},  {{+1,0}}},
-        {{{0,-1,0,0}},  {{+1,-1}},  {{-1,0}}},
-
-        // Right edge.
-        {{{0,-1,0,0}},  {{+1,-1}},  {{0,+1}}},
-        {{{0,0,-1,0}},  {{+1,+1}},  {{0,-1}}},
-
-        // Bottom edge.
-        {{{0,0,-1,0}},  {{+1,+1}},  {{-1,0}}},
-        {{{0,0,0,-1}},  {{-1,+1}},  {{+1,0}}},
-
-        // Top-left corner.
-        {{{1,0,0,0}},  {{-1,-1}},  {{0,+1}}},
-        {{{1,0,0,0}},  {{-1,-1}},  {{0,+kOctoOffset}}},
-        {{{1,0,0,0}},  {{-1,-1}},  {{+1,0}}},
-        {{{1,0,0,0}},  {{-1,-1}},  {{+kOctoOffset,0}}},
-
-        // Top-right corner.
-        {{{0,1,0,0}},  {{+1,-1}},  {{-1,0}}},
-        {{{0,1,0,0}},  {{+1,-1}},  {{-kOctoOffset,0}}},
-        {{{0,1,0,0}},  {{+1,-1}},  {{0,+1}}},
-        {{{0,1,0,0}},  {{+1,-1}},  {{0,+kOctoOffset}}},
-
-        // Bottom-right corner.
-        {{{0,0,1,0}},  {{+1,+1}},  {{0,-1}}},
-        {{{0,0,1,0}},  {{+1,+1}},  {{0,-kOctoOffset}}},
-        {{{0,0,1,0}},  {{+1,+1}},  {{-1,0}}},
-        {{{0,0,1,0}},  {{+1,+1}},  {{-kOctoOffset,0}}},
-
-        // Bottom-left corner.
-        {{{0,0,0,1}},  {{-1,+1}},  {{+1,0}}},
-        {{{0,0,0,1}},  {{-1,+1}},  {{+kOctoOffset,0}}},
-        {{{0,0,0,1}},  {{-1,+1}},  {{0,-1}}},
-        {{{0,0,0,1}},  {{-1,+1}},  {{0,-kOctoOffset}}}};
-
-GR_DECLARE_STATIC_UNIQUE_KEY(gMSAAVertexBufferKey);
-
-static constexpr uint16_t kMSAAIndexData[] = {
-        // Inset octagon. (Full sample mask.)
-        0, 1, 2,
-        0, 2, 3,
-        0, 3, 6,
-        3, 4, 5,
-        3, 5, 6,
-        6, 7, 0,
-
-        // Top-left arc. (Sample mask is set to the arc.)
-         8,  9, 10,
-         9, 11, 10,
-
-        // Top-right arc.
-        12, 13, 14,
-        13, 15, 14,
-
-        // Bottom-right arc.
-        16, 17, 18,
-        17, 19, 18,
-
-        // Bottom-left arc.
-        20, 21, 22,
-        21, 23, 22};
-
-GR_DECLARE_STATIC_UNIQUE_KEY(gMSAAIndexBufferKey);
 
 class GrFillRRectOp::Processor::MSAAImpl : public GrGLSLGeometryProcessor {
     void onEmitCode(EmitArgs& args, GrGPArgs* gpArgs) override {
@@ -695,68 +730,41 @@ GrGLSLPrimitiveProcessor* GrFillRRectOp::Processor::createGLSLInstance(
 }
 
 void GrFillRRectOp::onExecute(GrOpFlushState* flushState, const SkRect& chainBounds) {
-    if (!fInstanceBuffer) {
+    if (!fInstanceBuffer || !fIndexBuffer || !fVertexBuffer) {
         return;  // Setup failed.
     }
 
-    sk_sp<const GrBuffer> indexBuffer, vertexBuffer;
-    int indexCount;
-
-    if (GrAAType::kCoverage == fAAType) {
-        GR_DEFINE_STATIC_UNIQUE_KEY(gCoverageIndexBufferKey);
-
-        indexBuffer = flushState->resourceProvider()->findOrMakeStaticBuffer(
-                GrGpuBufferType::kIndex, sizeof(kCoverageIndexData), kCoverageIndexData,
-                gCoverageIndexBufferKey);
-
-        GR_DEFINE_STATIC_UNIQUE_KEY(gCoverageVertexBufferKey);
-
-        vertexBuffer = flushState->resourceProvider()->findOrMakeStaticBuffer(
-                GrGpuBufferType::kVertex, sizeof(kCoverageVertexData), kCoverageVertexData,
-                gCoverageVertexBufferKey);
-
-        indexCount = SK_ARRAY_COUNT(kCoverageIndexData);
-    } else {
-        GR_DEFINE_STATIC_UNIQUE_KEY(gMSAAIndexBufferKey);
-
-        indexBuffer = flushState->resourceProvider()->findOrMakeStaticBuffer(
-                GrGpuBufferType::kIndex, sizeof(kMSAAIndexData), kMSAAIndexData,
-                gMSAAIndexBufferKey);
-
-        GR_DEFINE_STATIC_UNIQUE_KEY(gMSAAVertexBufferKey);
-
-        vertexBuffer = flushState->resourceProvider()->findOrMakeStaticBuffer(
-                GrGpuBufferType::kVertex, sizeof(kMSAAVertexData), kMSAAVertexData,
-                gMSAAVertexBufferKey);
-
-        indexCount = SK_ARRAY_COUNT(kMSAAIndexData);
-    }
-
-    if (!indexBuffer || !vertexBuffer) {
-        return;
-    }
-
-    Processor proc(fAAType, fFlags);
-    SkASSERT(proc.instanceStride() == (size_t)fInstanceStride);
+    Processor* proc = flushState->allocator()->make<Processor>(fAAType, fFlags);
+    SkASSERT(proc->instanceStride() == (size_t)fInstanceStride);
 
     GrPipeline::InitArgs initArgs;
     if (GrAAType::kMSAA == fAAType) {
         initArgs.fInputFlags = GrPipeline::InputFlags::kHWAntialias;
     }
     initArgs.fCaps = &flushState->caps();
-    initArgs.fResourceProvider = flushState->resourceProvider();
-    initArgs.fDstProxy = flushState->drawOpArgs().fDstProxy;
+    initArgs.fDstProxy = flushState->drawOpArgs().dstProxy();
+    initArgs.fOutputSwizzle = flushState->drawOpArgs().outputSwizzle();
     auto clip = flushState->detachAppliedClip();
-    GrPipeline::FixedDynamicState fixedDynamicState(clip.scissorState().rect());
-    GrPipeline pipeline(initArgs, std::move(fProcessors), std::move(clip));
+    GrPipeline::FixedDynamicState* fixedDynamicState =
+        flushState->allocator()->make<GrPipeline::FixedDynamicState>(clip.scissorState().rect());
+    GrPipeline* pipeline = flushState->allocator()->make<GrPipeline>(initArgs,
+                                                                     std::move(fProcessors),
+                                                                     std::move(clip));
 
-    GrMesh mesh(GrPrimitiveType::kTriangles);
-    mesh.setIndexedInstanced(
-            std::move(indexBuffer), indexCount, fInstanceBuffer, fInstanceCount, fBaseInstance,
-            GrPrimitiveRestart::kNo);
-    mesh.setVertexData(std::move(vertexBuffer));
-    flushState->rtCommandBuffer()->draw(
-            proc, pipeline, &fixedDynamicState, nullptr, &mesh, 1, this->bounds());
+    GrProgramInfo programInfo(flushState->drawOpArgs().numSamples(),
+                              flushState->drawOpArgs().origin(),
+                              *pipeline,
+                              *proc,
+                              fixedDynamicState,
+                              nullptr, 0);
+
+    GrMesh* mesh = flushState->allocator()->make<GrMesh>(GrPrimitiveType::kTriangles);
+    mesh->setIndexedInstanced(
+            std::move(fIndexBuffer), fIndexCount, std::move(fInstanceBuffer), fInstanceCount,
+            fBaseInstance, GrPrimitiveRestart::kNo);
+    mesh->setVertexData(std::move(fVertexBuffer));
+    flushState->opsRenderPass()->draw(programInfo, mesh, 1, this->bounds());
+    fIndexCount = 0;
 }
 
 // Will the given corner look good if we use HW derivatives?
@@ -815,5 +823,4 @@ static bool can_use_hw_derivatives_with_coverage(
         }
     }
     SK_ABORT("Invalid round rect type.");
-    return false;  // Add this return to keep GCC happy.
 }

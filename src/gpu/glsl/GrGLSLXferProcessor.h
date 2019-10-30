@@ -8,9 +8,9 @@
 #ifndef GrGLSLXferProcessor_DEFINED
 #define GrGLSLXferProcessor_DEFINED
 
-#include "SkPoint.h"
-#include "glsl/GrGLSLProgramDataManager.h"
-#include "glsl/GrGLSLUniformHandler.h"
+#include "include/core/SkPoint.h"
+#include "src/gpu/glsl/GrGLSLProgramDataManager.h"
+#include "src/gpu/glsl/GrGLSLUniformHandler.h"
 
 class GrXferProcessor;
 class GrGLSLXPBuilder;
@@ -36,7 +36,7 @@ public:
                  const char* outputSecondary,
                  const SamplerHandle dstTextureSamplerHandle,
                  GrSurfaceOrigin dstTextureOrigin,
-                 uint16_t outputSwizzleKey)
+                 const GrSwizzle& outputSwizzle)
                 : fXPFragBuilder(fragBuilder)
                 , fUniformHandler(uniformHandler)
                 , fShaderCaps(caps)
@@ -46,8 +46,8 @@ public:
                 , fOutputPrimary(outputPrimary)
                 , fOutputSecondary(outputSecondary)
                 , fDstTextureSamplerHandle(dstTextureSamplerHandle)
-                , fDstTextureOrigin(dstTextureOrigin) {
-            fOutputSwizzle.setFromKey(outputSwizzleKey);
+                , fDstTextureOrigin(dstTextureOrigin)
+                , fOutputSwizzle(outputSwizzle) {
         }
         GrGLSLXPFragmentBuilder* fXPFragBuilder;
         GrGLSLUniformHandler* fUniformHandler;
