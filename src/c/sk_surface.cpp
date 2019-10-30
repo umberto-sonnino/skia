@@ -12,8 +12,10 @@
 #include "include/core/SkMatrix.h"
 #include "include/core/SkPaint.h"
 #include "include/core/SkPath.h"
+#include "include/core/SkPathMeasure.h"
 #include "include/core/SkPictureRecorder.h"
 #include "include/core/SkSurface.h"
+#include "include/core/SkVertices.h"
 #include "include/gpu/GrContext.h"
 #include "include/gpu/gl/GrGLInterface.h"
 #include "src/gpu/gl/GrGLUtil.h"
@@ -200,8 +202,31 @@ void sk_path_cubic_to(sk_path_t* cpath, float x0, float y0, float x1, float y1, 
     as_path(cpath)->cubicTo(x0, y0, x1, y1, x2, y2);
 }
 
+void sk_path_add_path(sk_path_t* cpath, const sk_path_t* csubpath, float x, float y) {
+    as_path(cpath)->addPath(AsPath(*csubpath), x, y);
+}
+
+SK_API void sk_path_add_path_with_matrix(sk_path_t* cpath, const sk_path_t* csubpath, float x, float y, 
+                                         sk_matrix_t* cmatrix) {
+    SkASSERT(cmatrix);
+    SkMatrix matrix;
+    from_c_matrix(cmatrix, &matrix);
+    matrix.setTranslateX(matrix.getTranslateX() + x);
+    matrix.setTranslateY(matrix.getTranslateY() + y);
+    SkPath* path = as_path(cpath);
+    path->addPath(AsPath(*csubpath), matrix);
+}
+
 void sk_path_close(sk_path_t* cpath) {
     as_path(cpath)->close();
+}
+
+void sk_path_reset(sk_path_t* cpath) {
+    as_path(cpath)->reset();
+}
+
+void sk_path_set_evenodd(sk_path_t* cpath, bool isEvenOdd) {
+    as_path(cpath)->setFillType(isEvenOdd ? SkPath::FillType::kEvenOdd_FillType : SkPath::FillType::kEvenOdd_FillType);
 }
 
 void sk_path_add_rect(sk_path_t* cpath, const sk_rect_t* crect, sk_path_direction_t cdir) {
