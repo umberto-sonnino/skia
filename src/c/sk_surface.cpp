@@ -226,7 +226,11 @@ void sk_path_reset(sk_path_t* cpath) {
 }
 
 void sk_path_set_evenodd(sk_path_t* cpath, bool isEvenOdd) {
-    as_path(cpath)->setFillType(isEvenOdd ? SkPath::FillType::kEvenOdd_FillType : SkPath::FillType::kEvenOdd_FillType);
+    as_path(cpath)->setFillType(
+        isEvenOdd 
+        ? SkPath::FillType::kEvenOdd_FillType 
+        : SkPath::FillType::kWinding_FillType
+    );
 }
 
 void sk_path_add_rect(sk_path_t* cpath, const sk_rect_t* crect, sk_path_direction_t cdir) {
